@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#08090d">
+  <title>NOIRWAVE Admin</title>
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <div class="noise"></div>
+
+  <section class="access-screen" id="accessScreen"><div class="login-card"><a class="brand" href="../index.html">NOIR<b>WAVE</b></a><p class="eyebrow">ADMIN ACCESS</p><h1>Проверка доступа</h1><p class="muted" id="accessMessage">Проверяем ваш аккаунт…</p><a class="primary access-link" href="../index.html">Вернуться на сайт</a></div></section>
+
+<div class="app hidden" id="app">
+    <aside class="sidebar" id="sidebar">
+      <div>
+        <a class="brand" href="../index.html">NOIR<b>WAVE</b></a>
+        <span class="admin-label">ADMIN</span>
+      </div>
+
+      <nav>
+        <button class="nav-item active" data-view="dashboard">⌂ <span>Главная</span></button>
+        <button class="nav-item" data-view="packs">◫ <span>Sample Packs</span></button>
+        <button class="nav-item" data-view="tracks">♪ <span>Треки</span></button><button class="nav-item owner-only" data-view="users">♙ <span>Пользователи</span></button>
+        <button class="nav-item" data-view="settings">⚙ <span>Настройки</span></button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <a href="../index.html" target="_blank">Открыть сайт ↗</a>
+        <button id="logoutBtn">Выйти</button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <button class="menu-btn" id="menuBtn">☰</button>
+        <div>
+          <p class="eyebrow">NOIRWAVE STUDIO</p>
+          <h2 id="viewTitle">Панель управления</h2>
+        </div>
+        <div class="user-chip"><span></span> <b id="adminUserName">Проверка…</b> · <span id="adminUserRole">—</span></div>
+      </header>
+
+      <section class="view active" id="dashboardView">
+        <div class="stats-grid">
+          <article><span>Sample Packs</span><strong id="packCount">0</strong><small>в демо-каталоге</small></article>
+          <article><span>Треки</span><strong id="trackCount">0</strong><small>в демо-каталоге</small></article>
+          <article><span>Статус</span><strong class="status-ok">ONLINE</strong><small>Cloudflare Pages</small></article>
+        </div>
+
+        <div class="panel-grid">
+          <article class="panel">
+            <div class="panel-head"><div><p class="eyebrow">QUICK ACTIONS</p><h3>Быстрое добавление</h3></div></div>
+            <div class="quick-actions">
+              <button data-open="packModal">+ Новый Sample Pack</button>
+              <button data-open="trackModal">+ Новый трек</button>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head"><div><p class="eyebrow">DEMO MODE</p><h3>Что уже работает</h3></div></div>
+            <ul class="check-list">
+              <li>Добавление и редактирование карточек</li>
+              <li>Предпросмотр выбранной обложки</li>
+              <li>Сохранение данных в браузере</li>
+              <li>Отображение добавленного на главной странице</li>
+            </ul>
+            <p class="note">Файлы пока не отправляются в интернет. Они только выбираются для предпросмотра. Настоящую загрузку подключим через R2.</p>
+          </article>
+        </div>
+
+        <article class="panel recent">
+          <div class="panel-head"><div><p class="eyebrow">RECENT CONTENT</p><h3>Последние материалы</h3></div></div>
+          <div id="recentContent" class="empty-state">Пока ничего не добавлено.</div>
+        </article>
+      </section>
+
+      <section class="view" id="packsView">
+        <div class="view-head">
+          <div><p class="eyebrow">SAMPLE PACKS</p><h3>Управление паками</h3></div>
+          <button class="primary" data-open="packModal">+ Добавить пак</button>
+        </div>
+        <div id="packsTable" class="content-list"></div>
+      </section>
+
+      <section class="view" id="tracksView">
+        <div class="view-head">
+          <div><p class="eyebrow">TRACKS</p><h3>Управление треками</h3></div>
+          <button class="primary" data-open="trackModal">+ Добавить трек</button>
+        </div>
+        <div id="tracksTable" class="content-list"></div>
+      </section>
+
+
+      <section class="view" id="usersView">
+        <div class="view-head">
+          <div><p class="eyebrow">ACCESS CONTROL</p><h3>Пользователи и роли</h3></div>
+        </div>
+        <article class="panel">
+          <p class="note">Аккаунты уже создаются в общей базе D1. Серверное назначение ролей подключим следующим шагом.</p>
+          <div id="usersTable" class="content-list"><div class="empty-state">Здесь появится общий список пользователей и выбор роли user/admin.</div></div>
+        </article>
+      </section>
+
+      <section class="view" id="settingsView">
+        <div class="panel settings-panel">
+          <p class="eyebrow">SETTINGS</p>
+          <h3>Настройки проекта</h3>
+          <label>Название проекта<input value="NOIRWAVE"></label>
+          <label>Контактный email<input value="hello@example.com"></label>
+          <label>Валюта<select><option>EUR (€)</option><option>USD ($)</option><option>RUB (₽)</option></select></label>
+          <button class="primary" type="button">Сохранить настройки</button>
+          <p class="note">В демо-версии настройки визуальные и не отправляются на сервер.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal hidden" id="packModal">
+    <div class="modal-card">
+      <button class="close" data-close>×</button>
+      <p class="eyebrow">NEW SAMPLE PACK</p>
+      <h2 id="packModalTitle">Добавить Sample Pack</h2>
+      <form id="packForm">
+        <input type="hidden" id="packId">
+        <div class="form-grid">
+          <label>Название<input id="packTitle" required placeholder="Void Drums Vol. 01"></label>
+          <label>Цена<input id="packPrice" placeholder="FREE или €9"></label>
+          <label>Жанр<input id="packGenre" placeholder="Dark Trap"></label>
+          <label>BPM<input id="packBpm" placeholder="140"></label>
+          <label>Тональность<input id="packKey" placeholder="C minor"></label>
+          <label>Количество файлов<input id="packFiles" placeholder="96"></label>
+          <label class="full">Описание<textarea id="packDescription" rows="4" placeholder="Краткое описание пака"></textarea></label>
+          <label>Обложка<input id="packCover" type="file" accept="image/*"></label>
+          <label>MP3-превью<input id="packPreview" type="file" accept="audio/*"></label>
+          <label class="full">ZIP-архив<input id="packZip" type="file" accept=".zip,.rar,.7z"></label>
+        </div>
+        <div class="preview-card" id="packCoverPreview"><span>Предпросмотр обложки</span></div>
+        <div class="form-actions">
+          <button type="button" class="ghost" data-close>Отмена</button>
+          <button class="primary" type="submit">Опубликовать</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="trackModal">
+    <div class="modal-card">
+      <button class="close" data-close>×</button>
+      <p class="eyebrow">NEW TRACK</p>
+      <h2 id="trackModalTitle">Добавить трек</h2>
+      <form id="trackForm">
+        <input type="hidden" id="trackId">
+        <div class="form-grid">
+          <label>Название<input id="trackTitle" required placeholder="After Midnight"></label>
+          <label>Исполнитель<input id="trackArtist" placeholder="NOIRWAVE"></label>
+          <label>Жанр<input id="trackGenre" placeholder="Dark Electronic"></label>
+          <label>BPM<input id="trackBpm" placeholder="128"></label>
+          <label class="full">Описание<textarea id="trackDescription" rows="4" placeholder="Описание трека"></textarea></label>
+          <label>Обложка<input id="trackCover" type="file" accept="image/*"></label>
+          <label>MP3-файл<input id="trackAudio" type="file" accept="audio/*"></label>
+        </div>
+        <div class="preview-card" id="trackCoverPreview"><span>Предпросмотр обложки</span></div>
+        <div class="form-actions">
+          <button type="button" class="ghost" data-close>Отмена</button>
+          <button class="primary" type="submit">Опубликовать</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="../config.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>
