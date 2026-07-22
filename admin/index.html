@@ -95,11 +95,21 @@
 
       <section class="view" id="usersView">
         <div class="view-head">
-          <div><p class="eyebrow">ACCESS CONTROL</p><h3>Пользователи и роли</h3></div>
+          <div>
+            <p class="eyebrow">ACCESS CONTROL</p>
+            <h3>Пользователи и роли</h3>
+          </div>
+          <button class="ghost" id="refreshUsersBtn" type="button">Обновить</button>
         </div>
+
         <article class="panel">
-          <p class="note">Аккаунты уже создаются в общей базе D1. Серверное назначение ролей подключим следующим шагом.</p>
-          <div id="usersTable" class="content-list"><div class="empty-state">Здесь появится общий список пользователей и выбор роли user/admin.</div></div>
+          <div class="users-summary">
+            <div><span>Всего аккаунтов</span><strong id="usersCount">—</strong></div>
+            <p>Новые аккаунты получают роль <b>user</b>. Только владелец может выдать или забрать роль <b>admin</b>. Роль <b>owner</b> изменить нельзя.</p>
+          </div>
+          <div id="usersTable" class="content-list">
+            <div class="empty-state">Загружаем пользователей из D1…</div>
+          </div>
         </article>
       </section>
 
@@ -169,6 +179,8 @@
       </form>
     </div>
   </div>
+
+  <div class="admin-toast hidden" id="adminToast"></div>
 
   <script src="../config.js"></script>
   <script src="admin.js"></script>

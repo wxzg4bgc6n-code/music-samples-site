@@ -6,6 +6,7 @@ const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const KEYS={packs:"noirwave_packs",tracks:"noirwave_tracks"};
 let packs=safeJson(localStorage.getItem(KEYS.packs),[]);
 let tracks=safeJson(localStorage.getItem(KEYS.tracks),[]);
+let users=[];
 let currentUser=null;
 
 function safeJson(value,fallback){
@@ -15,6 +16,14 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 function esc(s=""){return String(s).replace(/[&<>"']/g,m=>({
   "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
 }[m]))}
+function adminToast(text,isError=false){
+  const el=$("#adminToast");if(!el)return;
+  el.textContent=text;
+  el.classList.toggle("error",isError);
+  el.classList.remove("hidden");
+  clearTimeout(window.__adminToastTimer);
+  window.__adminToastTimer=setTimeout(()=>el.classList.add("hidden"),3500);
+}
 function token(){return localStorage.getItem(AUTH_TOKEN_KEY)||""}
 async function api(path,options={}){
   const headers=new Headers(options.headers||{});
@@ -41,6 +50,7 @@ function allow(){
   $("#adminUserName").textContent=currentUser.name;
   $("#adminUserRole").textContent=currentUser.role.toUpperCase();
   render();
+  if(currentUser.role==="owner")loadUsers();
 }
 async function boot(){
   if(!token()){
@@ -75,6 +85,7 @@ $$(".nav-item").forEach(btn=>btn.addEventListener("click",()=>{
   $("#"+btn.dataset.view+"View").classList.add("active");
   $("#viewTitle").textContent=titles[btn.dataset.view];
   $("#sidebar").classList.remove("open");
+  if(btn.dataset.view==="users"&&currentUser?.role==="owner")loadUsers();
 }));
 $("#menuBtn").addEventListener("click",()=>$("#sidebar").classList.toggle("open"));
 
@@ -199,10 +210,114 @@ function render(){
     <div class="meta"><span>${esc(x.genre||"Без жанра")}</span></div><div class="meta"></div><div></div>
   </div>`).join(""):"Пока ничего не добавлено.";
 
-  if(currentUser?.role==="owner"){
-    $("#usersTable").innerHTML='<div class="empty-state">Вход владельца подтверждён через Google и D1. Общий список пользователей и выдачу роли admin подключим следующим шагом.</div>';
+}
+function userInitial(name,email){
+  return String(name||email||"?").trim().charAt(0).toUpperCase();
+}
+function formatDate(timestamp){
+  if(!timestamp)return "—";
+  return new Date(Number(timestamp)*1000).toLocaleDateString("ru-RU",{
+    day:"2-digit",month:"2-digit",year:"numeric"
+  });
+}
+function renderUsers(){
+  const root=$("#usersTable");
+  if(!root)return;
+
+  if(currentUser?.role!=="owner"){
+    root.innerHTML='<div class="empty-state">Этот раздел доступен только владельцу сайта.</div>';
+    return;
+  }
+
+  $("#usersCount").textContent=users.length;
+
+  if(!users.length){
+    root.innerHTML='<div class="empty-state">В базе пока нет пользователей.</div>';
+    return;
+  }
+
+  root.innerHTML=users.map(user=>{
+    const isOwner=user.role==="owner";
+    const isCurrent=user.id===currentUser.id;
+    const avatar=user.avatar_url
+      ? `<img class="user-avatar" src="${esc(user.avatar_url)}" alt="">`
+      : `<div class="user-avatar user-avatar-fallback">${esc(userInitial(user.name,user.email))}</div>`;
+
+    const roleControl=isOwner
+      ? '<span class="role-label role-owner">OWNER</span>'
+      : `<select aria-label="Роль пользователя" onchange="changeUserRole('${user.id}',this.value,this)">
+          <option value="user" ${user.role==="user"?"selected":""}>user</option>
+          <option value="admin" ${user.role==="admin"?"selected":""}>admin</option>
+        </select>`;
+
+    return `<article class="real-user-row ${isCurrent?"current":""}">
+      ${avatar}
+      <div class="user-main">
+        <h4>${esc(user.name)}${isCurrent?" · вы":""}</h4>
+        <p>${esc(user.email)}</p>
+      </div>
+      <div class="user-meta created-cell">
+        <span>Регистрация</span>
+        <span>${formatDate(user.created_at)}</span>
+      </div>
+      <div class="role-control">
+        <span>Роль</span>
+        ${roleControl}
+      </div>
+      <div class="user-meta">
+        <span class="user-status ${user.status==="blocked"?"blocked":""}">${user.status==="blocked"?"Заблокирован":"Активен"}</span>
+        <span>${user.email_verified?"Почта подтверждена":"Почта не подтверждена"}</span>
+      </div>
+    </article>`;
+  }).join("");
+}
+async function loadUsers(){
+  const root=$("#usersTable");
+  if(currentUser?.role!=="owner"||!root)return;
+
+  root.innerHTML='<div class="empty-state loading-line">Загружаем пользователей из D1…</div>';
+
+  try{
+    const data=await api("/api/admin/users");
+    users=Array.isArray(data.users)?data.users:[];
+    renderUsers();
+  }catch(error){
+    root.innerHTML=`<div class="empty-state">${esc(error.message||"Не удалось загрузить пользователей")}</div>`;
+    adminToast(error.message||"Не удалось загрузить пользователей",true);
   }
 }
+window.changeUserRole=async(userId,newRole,select)=>{
+  const user=users.find(item=>item.id===userId);
+  if(!user)return;
+
+  const oldRole=user.role;
+  const label=newRole==="admin"?"администратором":"обычным пользователем";
+
+  if(!confirm(`Сделать ${user.name} ${label}?`)){
+    select.value=oldRole;
+    return;
+  }
+
+  select.disabled=true;
+
+  try{
+    const data=await api("/api/admin/users/role",{
+      method:"POST",
+      body:JSON.stringify({user_id:userId,role:newRole})
+    });
+    users=users.map(item=>item.id===userId?data.user:item);
+    renderUsers();
+    adminToast(newRole==="admin"
+      ? `${data.user.name} теперь администратор`
+      : `У ${data.user.name} убран доступ к админке`
+    );
+  }catch(error){
+    select.disabled=false;
+    select.value=oldRole;
+    adminToast(error.message||"Не удалось изменить роль",true);
+  }
+};
+$("#refreshUsersBtn")?.addEventListener("click",loadUsers);
 window.deleteItem=(type,id)=>{
   if(!confirm("Удалить этот материал?"))return;
   if(type==="pack")packs=packs.filter(x=>x.id!==id);
