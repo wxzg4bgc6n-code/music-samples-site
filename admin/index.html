@@ -117,11 +117,14 @@
         <div class="panel settings-panel">
           <p class="eyebrow">SETTINGS</p>
           <h3>Настройки проекта</h3>
-          <label>Название проекта<input value="NOIRWAVE"></label>
-          <label>Контактный email<input value="hello@example.com"></label>
-          <label>Валюта<select><option>EUR (€)</option><option>USD ($)</option><option>RUB (₽)</option></select></label>
-          <button class="primary" type="button">Сохранить настройки</button>
+          <form id="settingsForm" class="settings-form">
+            <label>Название проекта<input id="settingsProjectName" value="NOIRWAVE" required></label>
+            <label>Контактный email<input id="settingsContactEmail" type="email" placeholder="mail@example.com"></label>
+            <label>Валюта<select id="settingsCurrency"><option value="EUR">EUR (€)</option><option value="USD">USD ($)</option><option value="RUB">RUB (₽)</option></select></label>
+            <button class="primary" id="saveSettingsBtn" type="submit">Сохранить настройки</button>
+          </form>
           <button class="ghost" id="storageSetupBtn" type="button">Проверить B2 и настроить загрузку</button>
+          <p class="note" id="settingsStatus">Настройки сохраняются в Cloudflare D1 и одинаковы для всех администраторов.</p>
           <p class="note">Кнопка B2 безопасно настраивает доступ браузера к загрузке только с вашего сайта. Секретный ключ остаётся внутри Worker.</p>
         </div>
       </section>

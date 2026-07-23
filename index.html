@@ -10,7 +10,7 @@
 <body>
 <canvas id="particles"></canvas><div class="glow"></div>
 <div class="wrap">
-<header><a class="logo" href="#">NOIR<b>WAVE</b></a><nav id="nav"><a href="#packs">Sample Packs</a><a href="#free">Бесплатные звуки</a><a href="#tracks">Треки</a><a href="#about">Обо мне</a><a href="#contacts">Контакты</a><button class="nav-account" id="accountBtn">Войти</button><a class="admin-nav hidden" id="adminNav" href="admin/">Админка</a></nav><button class="menu" id="menu"><span></span><span></span><span></span></button></header>
+<header><a class="logo" data-project-brand href="#">NOIR<b>WAVE</b></a><nav id="nav"><a href="#packs">Sample Packs</a><a href="#free">Бесплатные звуки</a><a href="#tracks">Треки</a><a href="#about">Обо мне</a><a href="#contacts">Контакты</a><button class="nav-account" id="accountBtn">Войти</button><a class="admin-nav hidden" id="adminNav" href="admin/">Админка</a></nav><button class="menu" id="menu"><span></span><span></span><span></span></button></header>
 <main>
 <section class="hero">
 <div>
@@ -56,15 +56,43 @@
 <div class="tracks" id="dynamicTracks"><div class="catalog-empty">Загружаем треки…</div></div>
 </section>
 
-<section id="contacts" class="reveal"><div class="contact"><div><p class="eyebrow">CUSTOM SOUND DESIGN</p><h2>Нужен собственный пак?</h2><p>Можно заказать уникальные сэмплы, звуки под игру, видео, трек или коммерческий проект.</p></div><a class="btn primary" href="mailto:hello@example.com">Обсудить заказ</a></div></section>
+<section id="contacts" class="reveal"><div class="contact"><div><p class="eyebrow">CUSTOM SOUND DESIGN</p><h2>Нужен собственный пак?</h2><p>Можно заказать уникальные сэмплы, звуки под игру, видео, трек или коммерческий проект.</p></div><a class="btn primary" id="contactEmailLink" href="#contacts">Обсудить заказ</a></div></section>
 </main>
-<footer><span>© 2026 NOIRWAVE.</span><div class="socials"><a href="#">Telegram</a><a href="#">VK</a><a href="#">YouTube</a><a href="#">SoundCloud</a></div></footer>
+<footer><span id="footerCopyright">© 2026 NOIRWAVE.</span><div class="socials"><a href="#">Telegram</a><a href="#">VK</a><a href="#">YouTube</a><a href="#">SoundCloud</a></div></footer>
+</div>
+
+<div class="global-player hidden" id="globalPlayer">
+  <div class="global-player-cover" id="globalPlayerCover"></div>
+  <div class="global-player-info">
+    <strong id="globalPlayerTitle">Название трека</strong>
+    <span id="globalPlayerArtist">NOIRWAVE</span>
+  </div>
+  <div class="global-player-main">
+    <div class="global-player-controls">
+      <button id="globalPrev" type="button" aria-label="Предыдущий трек">⏮</button>
+      <button class="global-play" id="globalPlay" type="button" aria-label="Воспроизвести">▶</button>
+      <button id="globalNext" type="button" aria-label="Следующий трек">⏭</button>
+    </div>
+    <div class="global-player-timeline">
+      <span id="globalCurrentTime">0:00</span>
+      <input id="globalSeek" type="range" min="0" max="1000" value="0" aria-label="Позиция трека">
+      <span id="globalDuration">0:00</span>
+    </div>
+  </div>
+  <div class="global-player-volume">
+    <button id="globalMute" type="button" aria-label="Выключить звук">🔊</button>
+    <input id="globalVolume" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Громкость">
+  </div>
+  <button class="global-download" id="globalDownload" type="button" title="Скачать">
+    <b>↓</b><span id="globalDownloadCount">0</span>
+  </button>
+  <button class="global-close" id="globalClose" type="button" aria-label="Закрыть плеер">×</button>
 </div>
 
 <div class="auth-modal hidden" id="authModal">
   <div class="auth-card">
     <button class="auth-close" id="authClose" aria-label="Закрыть">×</button>
-    <a class="logo" href="#">NOIR<b>WAVE</b></a>
+    <a class="logo" data-project-brand href="#">NOIR<b>WAVE</b></a>
 
     <div class="auth-guest" id="authGuestView">
       <p class="eyebrow">ACCOUNT</p>

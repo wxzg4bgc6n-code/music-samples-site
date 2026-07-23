@@ -366,7 +366,7 @@ function renderCatalog() {
   const packs = filteredPacks();
   const tracks = catalogState.items.filter(item => item.type === "track");
   const playable = catalogState.items.filter(item =>
-    item.type === "track" ? item.audio_url : item.preview_url
+    item.type === "pack" && item.preview_url
   );
 
   $("#dynamicPacks").innerHTML = packs.length
@@ -377,7 +377,7 @@ function renderCatalog() {
     : '<div class="catalog-empty">Пока ничего не опубликовано.</div>';
   $("#dynamicPreviews").innerHTML = playable.length
     ? playable.map(previewRow).join("")
-    : '<div class="catalog-empty compact">Превью появятся после публикации первого пака или трека.</div>';
+    : '<div class="catalog-empty compact">Превью появятся после публикации первого пака.</div>';
 
   const totalFiles = catalogState.items
     .filter(item => item.type === "pack")
@@ -394,6 +394,14 @@ function renderCatalog() {
   updateCategoryCounts();
   applyTrackView();
   renderHeader();
+  if (currentPlayerId) {
+    const currentItem = findItem(currentPlayerId);
+    if (currentItem) {
+      updateGlobalPlayer(currentItem);
+      setPlayingState(currentPlayerId, Boolean(currentAudio && !currentAudio.paused));
+      syncTimeUI(currentPlayerId);
+    }
+  }
 }
 
 function applyTrackView() {
@@ -483,6 +491,26 @@ async function loadCatalog() {
   }
 }
 
+async function loadPublicSettings() {
+  try {
+    const data = await api("/api/settings");
+    const settings = data.settings || {};
+    const projectName = String(settings.project_name || "NOIRWAVE").trim();
+    document.title = `${projectName} — Sample Packs`;
+    document.querySelectorAll("[data-project-brand]").forEach(element => {
+      element.textContent = projectName;
+    });
+    const copyright = $("#footerCopyright");
+    if (copyright) copyright.textContent = `© ${new Date().getFullYear()} ${projectName}.`;
+    const contact = $("#contactEmailLink");
+    if (contact) {
+      contact.href = settings.contact_email ? `mailto:${settings.contact_email}` : "#contacts";
+      contact.classList.toggle("disabled", !settings.contact_email);
+      contact.title = settings.contact_email ? settings.contact_email : "Контактный email пока не указан";
+    }
+  } catch {}
+}
+
 function findItem(id) {
   return catalogState.items.find(item => item.id === id);
 }
@@ -500,27 +528,100 @@ function resetPlayerProgress(id) {
   const current = document.querySelector(`[data-current-time="${CSS.escape(id)}"]`);
   if (seek) seek.value = 0;
   if (current) current.textContent = "0:00";
+  if ($("#globalSeek")) $("#globalSeek").value = 0;
+  if ($("#globalCurrentTime")) $("#globalCurrentTime").textContent = "0:00";
 }
 
-function stopAudio() {
+function setPlayingState(id, playing) {
+  if (id) {
+    document.querySelectorAll(`[data-play="${CSS.escape(id)}"]`).forEach(button => {
+      button.textContent = button.classList.contains("preview-btn")
+        ? (playing ? "❚❚" : "▶ Preview")
+        : (playing ? "❚❚" : "▶");
+      button.classList.toggle("playing", playing);
+    });
+  }
+  if ($("#globalPlay")) $("#globalPlay").textContent = playing ? "❚❚" : "▶";
+}
+
+function playableQueue(item) {
+  if (!item) return [];
+  return catalogState.items.filter(entry =>
+    item.type === "track"
+      ? entry.type === "track" && entry.audio_url
+      : entry.type === "pack" && entry.preview_url
+  );
+}
+
+function updateGlobalPlayer(item) {
+  if (!item) return;
+  $("#globalPlayer").classList.remove("hidden");
+  document.body.classList.add("player-visible");
+  $("#globalPlayerTitle").textContent = item.title;
+  $("#globalPlayerArtist").textContent = item.type === "track"
+    ? (item.artist || "NOIRWAVE")
+    : "Превью Sample Pack";
+  $("#globalPlayerCover").style.backgroundImage = item.cover_url
+    ? `url("${item.cover_url}")`
+    : "";
+  $("#globalPlayerCover").classList.toggle("without-cover", !item.cover_url);
+  $("#globalVolume").value = playerVolume;
+  $("#globalMute").textContent = currentAudio?.muted || playerVolume === 0 ? "🔇" : "🔊";
+
+  const queue = playableQueue(item);
+  const index = queue.findIndex(entry => entry.id === item.id);
+  $("#globalPrev").disabled = index <= 0;
+  $("#globalNext").disabled = index < 0 || index >= queue.length - 1;
+  $("#globalDownload").classList.toggle("hidden", !item);
+  $("#globalDownload").title = item.type === "track" ? "Скачать трек" : "Скачать пак";
+  $("#globalDownloadCount").textContent = item.downloads;
+}
+
+function syncTimeUI(itemId) {
+  if (!currentAudio?.duration) return;
+  const progress = Math.round(currentAudio.currentTime / currentAudio.duration * 1000);
+  const seek = document.querySelector(`[data-seek="${CSS.escape(itemId)}"]`);
+  const current = document.querySelector(`[data-current-time="${CSS.escape(itemId)}"]`);
+  const duration = document.querySelector(`[data-duration="${CSS.escape(itemId)}"]`);
+  if (seek) seek.value = progress;
+  if (current) current.textContent = formatTime(currentAudio.currentTime);
+  if (duration) duration.textContent = formatTime(currentAudio.duration);
+  $("#globalSeek").value = progress;
+  $("#globalCurrentTime").textContent = formatTime(currentAudio.currentTime);
+  $("#globalDuration").textContent = formatTime(currentAudio.duration);
+}
+
+function stopAudio(hidePlayer = false) {
+  const stoppedId = currentPlayerId;
   if (currentAudio) {
     currentAudio.pause();
     currentAudio.src = "";
   }
-  if (currentPlayButton) {
-    currentPlayButton.textContent = currentPlayButton.classList.contains("preview-btn")
-      ? "▶ Preview" : "▶";
-    currentPlayButton.classList.remove("playing");
-  }
-  resetPlayerProgress(currentPlayerId);
+  setPlayingState(stoppedId, false);
+  resetPlayerProgress(stoppedId);
   currentAudio = null;
   currentPlayButton = null;
   currentPlayerId = "";
+  if (hidePlayer) {
+    $("#globalPlayer").classList.add("hidden");
+    document.body.classList.remove("player-visible");
+  }
 }
 
 async function playItem(item, button) {
-  if (currentPlayButton === button) {
-    stopAudio();
+  if (currentAudio && currentPlayerId === item.id) {
+    if (currentAudio.paused) {
+      try {
+        await currentAudio.play();
+        updateGlobalPlayer(item);
+        setPlayingState(item.id, true);
+      } catch {
+        toast("Браузер не разрешил воспроизведение");
+      }
+    } else {
+      currentAudio.pause();
+      setPlayingState(item.id, false);
+    }
     return;
   }
   stopAudio();
@@ -533,26 +634,23 @@ async function playItem(item, button) {
   currentPlayButton = button;
   currentPlayerId = item.id;
   currentAudio.volume = playerVolume;
-  button.textContent = "❚❚";
-  button.classList.add("playing");
-  const seek = document.querySelector(`[data-seek="${CSS.escape(item.id)}"]`);
-  const currentTime = document.querySelector(`[data-current-time="${CSS.escape(item.id)}"]`);
-  const duration = document.querySelector(`[data-duration="${CSS.escape(item.id)}"]`);
+  updateGlobalPlayer(item);
+  setPlayingState(item.id, true);
   const muteButton = document.querySelector(`[data-mute="${CSS.escape(item.id)}"]`);
   const volume = document.querySelector(`[data-volume="${CSS.escape(item.id)}"]`);
   if (volume) volume.value = playerVolume;
   if (muteButton) muteButton.textContent = playerVolume === 0 ? "🔇" : "🔊";
   currentAudio.addEventListener("loadedmetadata", () => {
-    if (duration) duration.textContent = formatTime(currentAudio.duration);
+    syncTimeUI(item.id);
   });
   currentAudio.addEventListener("timeupdate", () => {
-    if (!currentAudio?.duration) return;
-    if (seek) seek.value = Math.round(currentAudio.currentTime / currentAudio.duration * 1000);
-    if (currentTime) currentTime.textContent = formatTime(currentAudio.currentTime);
+    syncTimeUI(item.id);
   });
-  currentAudio.addEventListener("ended", stopAudio, { once: true });
+  currentAudio.addEventListener("ended", () => {
+    if (!playAdjacent(1, true)) setPlayingState(item.id, false);
+  }, { once: true });
   currentAudio.addEventListener("error", () => {
-    stopAudio();
+    stopAudio(true);
     toast("Не удалось открыть аудиофайл");
   }, { once: true });
   try {
@@ -566,6 +664,20 @@ async function playItem(item, button) {
     stopAudio();
     toast("Браузер не разрешил воспроизведение");
   }
+}
+
+function playAdjacent(direction, automatic = false) {
+  const item = findItem(currentPlayerId);
+  const queue = playableQueue(item);
+  const index = queue.findIndex(entry => entry.id === currentPlayerId);
+  const next = queue[index + direction];
+  if (!next) {
+    if (!automatic) toast(direction > 0 ? "Это последний трек" : "Это первый трек");
+    return false;
+  }
+  const button = document.querySelector(`[data-play="${CSS.escape(next.id)}"]`);
+  void playItem(next, button);
+  return true;
 }
 
 async function downloadItem(item) {
@@ -590,6 +702,7 @@ async function downloadItem(item) {
     item.downloads += 1;
     const counter = document.querySelector(`[data-download-count="${CSS.escape(item.id)}"]`);
     if (counter) counter.textContent = item.downloads;
+    if (currentPlayerId === item.id) $("#globalDownloadCount").textContent = item.downloads;
   } catch (error) {
     if (error.status === 401) {
       authState.user = null;
@@ -615,7 +728,9 @@ document.addEventListener("click", event => {
     event.preventDefault();
     if (currentAudio && currentPlayerId === muteButton.dataset.mute) {
       currentAudio.muted = !currentAudio.muted;
-      muteButton.textContent = currentAudio.muted || currentAudio.volume === 0 ? "🔇" : "🔊";
+      const icon = currentAudio.muted || currentAudio.volume === 0 ? "🔇" : "🔊";
+      muteButton.textContent = icon;
+      $("#globalMute").textContent = icon;
     }
     return;
   }
@@ -640,6 +755,8 @@ document.addEventListener("input", event => {
       currentAudio.muted = false;
       const mute = document.querySelector(`[data-mute="${CSS.escape(currentPlayerId)}"]`);
       if (mute) mute.textContent = playerVolume === 0 ? "🔇" : "🔊";
+      $("#globalMute").textContent = playerVolume === 0 ? "🔇" : "🔊";
+      $("#globalVolume").value = playerVolume;
     }
     return;
   }
@@ -648,6 +765,54 @@ document.addEventListener("input", event => {
     currentAudio.currentTime = Number(seek.value) / 1000 * currentAudio.duration;
   }
 });
+
+$("#globalPlay")?.addEventListener("click", () => {
+  const item = findItem(currentPlayerId);
+  if (item) void playItem(item, document.querySelector(`[data-play="${CSS.escape(item.id)}"]`));
+});
+
+$("#globalPrev")?.addEventListener("click", () => playAdjacent(-1));
+$("#globalNext")?.addEventListener("click", () => playAdjacent(1));
+
+$("#globalMute")?.addEventListener("click", () => {
+  if (!currentAudio) return;
+  currentAudio.muted = !currentAudio.muted;
+  const icon = currentAudio.muted || currentAudio.volume === 0 ? "🔇" : "🔊";
+  $("#globalMute").textContent = icon;
+  const cardMute = document.querySelector(`[data-mute="${CSS.escape(currentPlayerId)}"]`);
+  if (cardMute) cardMute.textContent = icon;
+});
+
+$("#globalVolume")?.addEventListener("input", event => {
+  playerVolume = Number(event.target.value);
+  localStorage.setItem("noirwave_volume", String(playerVolume));
+  document.querySelectorAll("[data-volume]").forEach(input => {
+    input.value = playerVolume;
+  });
+  if (currentAudio) {
+    currentAudio.volume = playerVolume;
+    currentAudio.muted = false;
+  }
+  const icon = playerVolume === 0 ? "🔇" : "🔊";
+  $("#globalMute").textContent = icon;
+  const cardMute = currentPlayerId
+    ? document.querySelector(`[data-mute="${CSS.escape(currentPlayerId)}"]`)
+    : null;
+  if (cardMute) cardMute.textContent = icon;
+});
+
+$("#globalSeek")?.addEventListener("input", event => {
+  if (currentAudio?.duration) {
+    currentAudio.currentTime = Number(event.target.value) / 1000 * currentAudio.duration;
+  }
+});
+
+$("#globalDownload")?.addEventListener("click", () => {
+  const item = findItem(currentPlayerId);
+  if (item) void downloadItem(item);
+});
+
+$("#globalClose")?.addEventListener("click", () => stopAudio(true));
 
 $("#trackViewToggle")?.addEventListener("click", () => {
   coversHidden = !coversHidden;
@@ -698,4 +863,5 @@ $("#logoutPublic")?.addEventListener("click", async () => {
 renderHeader();
 restoreSession();
 loadCatalog();
+loadPublicSettings();
 window.addEventListener("load", initGoogleButton);

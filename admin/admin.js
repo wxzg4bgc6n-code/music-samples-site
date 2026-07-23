@@ -8,6 +8,7 @@ let items = [];
 let users = [];
 let currentUser = null;
 let busy = false;
+let siteSettings = { project_name: "NOIRWAVE", contact_email: "", currency: "EUR" };
 
 function esc(value = "") {
   return String(value).replace(/[&<>"']/g, char => ({
@@ -73,7 +74,7 @@ async function boot() {
       return;
     }
     allow();
-    await loadContent();
+    await Promise.all([loadContent(), loadSettings()]);
     if (currentUser.role === "owner") loadUsers();
     setupStorage();
   } catch (error) {
@@ -187,6 +188,54 @@ async function setupStorage() {
 
 $("#storageSetupBtn")?.addEventListener("click", setupStorage);
 
+async function loadSettings() {
+  try {
+    const data = await api("/api/settings");
+    siteSettings = data.settings || siteSettings;
+    $("#settingsProjectName").value = siteSettings.project_name || "NOIRWAVE";
+    $("#settingsContactEmail").value = siteSettings.contact_email || "";
+    $("#settingsCurrency").value = siteSettings.currency || "EUR";
+    $("#packPrice").placeholder = siteSettings.currency === "RUB"
+      ? "FREE или 900 ₽"
+      : siteSettings.currency === "USD"
+        ? "FREE или $9"
+        : "FREE или €9";
+  } catch (error) {
+    $("#settingsStatus").textContent = error.message || "Не удалось загрузить настройки";
+    $("#settingsStatus").classList.add("error");
+  }
+}
+
+$("#settingsForm")?.addEventListener("submit", async event => {
+  event.preventDefault();
+  const button = $("#saveSettingsBtn");
+  const status = $("#settingsStatus");
+  button.disabled = true;
+  button.textContent = "Сохраняем…";
+  status.classList.remove("success", "error");
+  try {
+    const data = await api("/api/admin/settings", {
+      method: "PUT",
+      body: JSON.stringify({
+        project_name: $("#settingsProjectName").value.trim(),
+        contact_email: $("#settingsContactEmail").value.trim(),
+        currency: $("#settingsCurrency").value
+      })
+    });
+    siteSettings = data.settings;
+    status.textContent = "Настройки сохранены и уже доступны на сайте.";
+    status.classList.add("success");
+    adminToast("Настройки проекта сохранены");
+  } catch (error) {
+    status.textContent = error.message || "Не удалось сохранить настройки";
+    status.classList.add("error");
+    adminToast(status.textContent, true);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Сохранить настройки";
+  }
+});
+
 async function loadContent() {
   try {
     const data = await api("/api/admin/content");
@@ -297,15 +346,131 @@ async function presignAndUpload(file, kind, onProgress) {
   };
 }
 
+function syncSafeSize(bytes, offset) {
+  return ((bytes[offset] & 0x7f) << 21) |
+    ((bytes[offset + 1] & 0x7f) << 14) |
+    ((bytes[offset + 2] & 0x7f) << 7) |
+    (bytes[offset + 3] & 0x7f);
+}
+
+function unsignedSize(bytes, offset) {
+  return ((bytes[offset] << 24) >>> 0) +
+    (bytes[offset + 1] << 16) +
+    (bytes[offset + 2] << 8) +
+    bytes[offset + 3];
+}
+
+function findDescriptionEnd(bytes, offset, end, encoding) {
+  if (encoding === 1 || encoding === 2) {
+    for (let index = offset; index + 1 < end; index += 2) {
+      if (bytes[index] === 0 && bytes[index + 1] === 0) return index + 2;
+    }
+    return end;
+  }
+  for (let index = offset; index < end; index += 1) {
+    if (bytes[index] === 0) return index + 1;
+  }
+  return end;
+}
+
+function embeddedCoverFile(bytes, start, end, mime, sourceName) {
+  if (start >= end || !mime.startsWith("image/")) return null;
+  const normalizedMime = mime === "image/jpg" ? "image/jpeg" : mime;
+  const extension = normalizedMime === "image/png" ? "png" : "jpg";
+  const baseName = sourceName.replace(/\.[^.]+$/, "") || "track";
+  const imageBytes = bytes.slice(start, end);
+  return new File([imageBytes], `${baseName}-embedded-cover.${extension}`, {
+    type: normalizedMime
+  });
+}
+
+async function extractEmbeddedCover(audioFile) {
+  if (!audioFile || !/(\.mp3$|audio\/mpeg)/i.test(`${audioFile.name} ${audioFile.type}`)) {
+    return null;
+  }
+  const header = new Uint8Array(await audioFile.slice(0, 10).arrayBuffer());
+  if (header.length < 10 || String.fromCharCode(...header.slice(0, 3)) !== "ID3") return null;
+
+  const version = header[3];
+  const tagSize = syncSafeSize(header, 6);
+  if (![2, 3, 4].includes(version) || tagSize <= 0) return null;
+  const readSize = Math.min(audioFile.size, tagSize + 10);
+  const bytes = new Uint8Array(await audioFile.slice(0, readSize).arrayBuffer());
+  const tagEnd = Math.min(bytes.length, tagSize + 10);
+  let offset = 10;
+
+  if ((header[5] & 0x40) && version >= 3 && offset + 4 <= tagEnd) {
+    const extendedSize = version === 4
+      ? syncSafeSize(bytes, offset)
+      : unsignedSize(bytes, offset);
+    offset += version === 3 ? extendedSize + 4 : extendedSize;
+  }
+
+  while (offset < tagEnd) {
+    if (version === 2) {
+      if (offset + 6 > tagEnd) break;
+      const frameId = String.fromCharCode(...bytes.slice(offset, offset + 3));
+      const frameSize = (bytes[offset + 3] << 16) | (bytes[offset + 4] << 8) | bytes[offset + 5];
+      const frameStart = offset + 6;
+      const frameEnd = Math.min(tagEnd, frameStart + frameSize);
+      if (!frameId.trim() || frameSize <= 0 || frameEnd <= frameStart) break;
+      if (frameId === "PIC" && frameStart + 5 < frameEnd) {
+        const encoding = bytes[frameStart];
+        const format = String.fromCharCode(...bytes.slice(frameStart + 1, frameStart + 4)).toLowerCase();
+        const mime = format === "png" ? "image/png" : "image/jpeg";
+        const imageStart = findDescriptionEnd(bytes, frameStart + 5, frameEnd, encoding);
+        return embeddedCoverFile(bytes, imageStart, frameEnd, mime, audioFile.name);
+      }
+      offset = frameEnd;
+      continue;
+    }
+
+    if (offset + 10 > tagEnd) break;
+    const frameId = String.fromCharCode(...bytes.slice(offset, offset + 4));
+    const frameSize = version === 4
+      ? syncSafeSize(bytes, offset + 4)
+      : unsignedSize(bytes, offset + 4);
+    const frameStart = offset + 10;
+    const frameEnd = Math.min(tagEnd, frameStart + frameSize);
+    if (!frameId.trim() || frameSize <= 0 || frameEnd <= frameStart) break;
+    if (frameId === "APIC") {
+      const encoding = bytes[frameStart];
+      let mimeEnd = frameStart + 1;
+      while (mimeEnd < frameEnd && bytes[mimeEnd] !== 0) mimeEnd += 1;
+      const mime = new TextDecoder("latin1").decode(bytes.slice(frameStart + 1, mimeEnd));
+      const descriptionStart = mimeEnd + 2;
+      const imageStart = findDescriptionEnd(bytes, descriptionStart, frameEnd, encoding);
+      return embeddedCoverFile(bytes, imageStart, frameEnd, mime, audioFile.name);
+    }
+    offset = frameEnd;
+  }
+  return null;
+}
+
 async function uploadFormFiles(type) {
   const isPack = type === "pack";
+  let trackCover = isPack ? null : $("#trackCover").files[0];
+  const trackAudio = isPack ? null : $("#trackAudio").files[0];
+  if (!isPack && !trackCover && trackAudio) {
+    setUploadState(type, "Проверяем встроенную обложку аудиофайла…", 2);
+    try {
+      trackCover = await extractEmbeddedCover(trackAudio);
+      if (trackCover) {
+        previewFile({ files: [trackCover] }, $("#trackCoverPreview"));
+        adminToast("Встроенная обложка найдена и будет использована");
+      }
+    } catch {
+      trackCover = null;
+    }
+  }
+
   const definitions = isPack ? [
     ["cover", $("#packCover").files[0], "обложка"],
     ["preview", $("#packPreview").files[0], "аудиопревью"],
     ["archive", $("#packZip").files[0], "архив"]
   ] : [
-    ["cover", $("#trackCover").files[0], "обложка"],
-    ["audio", $("#trackAudio").files[0], "аудиофайл"]
+    ["cover", trackCover, "обложка"],
+    ["audio", trackAudio, "аудиофайл"]
   ];
   const selected = definitions.filter(([, file]) => file);
   const assets = {};

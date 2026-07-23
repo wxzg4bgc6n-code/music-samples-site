@@ -48,6 +48,9 @@ async function route(request, env, ctx) {
   if (request.method === "GET" && path === "/api/content") {
     return listPublicContent(request, env);
   }
+  if (request.method === "GET" && path === "/api/settings") {
+    return getSettings(request, env);
+  }
 
   const mediaMatch = path.match(/^\/api\/content\/([^/]+)\/(cover|audio|preview)$/);
   if (request.method === "GET" && mediaMatch) {
@@ -83,6 +86,10 @@ async function route(request, env, ctx) {
   if (request.method === "POST" && path === "/api/admin/content") {
     const admin = await requireRole(request, env, ["admin", "owner"]);
     return saveContent(request, env, admin);
+  }
+  if (request.method === "PUT" && path === "/api/admin/settings") {
+    await requireRole(request, env, ["admin", "owner"]);
+    return saveSettings(request, env);
   }
 
   const adminContentMatch = path.match(/^\/api\/admin\/content\/([^/]+)$/);
@@ -168,7 +175,14 @@ function ensureSchema(env) {
           updated_at INTEGER NOT NULL
         )`,
         "CREATE INDEX IF NOT EXISTS idx_content_type_created ON content(type, created_at DESC)",
-        "CREATE INDEX IF NOT EXISTS idx_content_status ON content(status)"
+        "CREATE INDEX IF NOT EXISTS idx_content_status ON content(status)",
+        `CREATE TABLE IF NOT EXISTS site_settings (
+          id INTEGER PRIMARY KEY CHECK(id = 1),
+          project_name TEXT NOT NULL DEFAULT 'NOIRWAVE',
+          contact_email TEXT NOT NULL DEFAULT '',
+          currency TEXT NOT NULL DEFAULT 'EUR',
+          updated_at INTEGER NOT NULL
+        )`
       ];
       for (const statement of statements) {
         await env.DB.prepare(statement).run();
@@ -355,6 +369,54 @@ async function listAdminContent(request, env) {
   const result = await env.DB.prepare("SELECT * FROM content ORDER BY created_at DESC").all();
   const base = new URL(request.url).origin;
   return json({ items: result.results.map(row => serializeContent(row, base, true)) }, 200, request, env);
+}
+
+async function getSettings(request, env) {
+  const row = await env.DB.prepare(
+    "SELECT project_name, contact_email, currency FROM site_settings WHERE id = 1"
+  ).first();
+  return json({
+    settings: row || {
+      project_name: "NOIRWAVE",
+      contact_email: "",
+      currency: "EUR"
+    }
+  }, 200, request, env);
+}
+
+async function saveSettings(request, env) {
+  const body = await readJson(request);
+  const projectName = clean(body.project_name, 80);
+  const contactEmail = clean(body.contact_email, 200).toLowerCase();
+  const currency = clean(body.currency, 8).toUpperCase();
+
+  if (!projectName) {
+    return json({ error: "Укажите название проекта" }, 400, request, env);
+  }
+  if (contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
+    return json({ error: "Проверьте контактный email" }, 400, request, env);
+  }
+  if (!["EUR", "USD", "RUB"].includes(currency)) {
+    return json({ error: "Неизвестная валюта" }, 400, request, env);
+  }
+
+  await env.DB.prepare(`
+    INSERT INTO site_settings (id, project_name, contact_email, currency, updated_at)
+    VALUES (1, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      project_name = excluded.project_name,
+      contact_email = excluded.contact_email,
+      currency = excluded.currency,
+      updated_at = excluded.updated_at
+  `).bind(projectName, contactEmail, currency, unixNow()).run();
+
+  return json({
+    settings: {
+      project_name: projectName,
+      contact_email: contactEmail,
+      currency
+    }
+  }, 200, request, env);
 }
 
 function serializeContent(row, base, admin) {
