@@ -18,45 +18,32 @@
 <h1>СЭМПЛЫ,<br><span>КОТОРЫЕ</span><br>ЗВУЧАТ</h1>
 <p class="lead">Авторские drum kits, loops, 808, FX, vocals, MIDI и presets. Готовые звуки для продюсеров — от идеи до финального трека.</p>
 <div class="actions"><a class="btn primary" href="#packs">Смотреть все паки</a><a class="btn ghost" href="#free">Скачать бесплатный пак</a></div>
-<div class="stats"><div class="stat"><strong data-count="1200">0</strong><span>СЭМПЛОВ</span></div><div class="stat"><strong data-count="18">0</strong><span>SAMPLE PACKS</span></div><div class="stat"><strong>24-bit</strong><span>WAV QUALITY</span></div><div class="stat"><strong>NEW</strong><span>КАЖДЫЙ МЕСЯЦ</span></div></div>
+<div class="stats"><div class="stat"><strong id="sampleStat">0</strong><span>СЭМПЛОВ</span></div><div class="stat"><strong id="packStat">0</strong><span>SAMPLE PACKS</span></div><div class="stat"><strong id="trackStat">0</strong><span>ТРЕКОВ</span></div><div class="stat"><strong>24-bit</strong><span>WAV QUALITY</span></div></div>
 </div>
 <article class="pack-hero" id="featured">
-<div class="art"><span class="badge">NEW PACK</span><small>NOIRWAVE ORIGINALS</small><h2>VOID<br>DRUMS</h2><canvas class="wave"></canvas></div>
-<div class="pack-meta"><div class="pack-meta-row"><div><h3>Void Drums Vol. 01</h3><p>96 файлов · WAV 24-bit · 428 MB</p></div><button class="circle main-play">▶</button></div><div class="progress"><i></i></div></div>
+<div class="art"><span class="badge" id="featuredBadge">КАТАЛОГ ГОТОВ</span><small>NOIRWAVE ORIGINALS</small><h2 id="featuredTitle">Пока нет опубликованных паков</h2><canvas class="wave"></canvas></div>
+<div class="pack-meta"><div class="pack-meta-row"><div><h3 id="featuredName">Первый пак появится здесь</h3><p id="featuredMeta">Загрузите его через админку</p></div><button class="circle main-play" id="featuredPlay" disabled>▶</button></div><div class="progress"><i></i></div></div>
 </article>
 </section>
 
 <section class="reveal">
 <div class="section-head"><div><p class="eyebrow">BROWSE BY TYPE</p><h2>Категории</h2></div><a class="link" href="#packs">Смотреть каталог ↗</a></div>
-<div class="categories"><a class="cat"><span>01 / 196</span><strong>DRUMS</strong></a><a class="cat"><span>02 / 124</span><strong>808</strong></a><a class="cat"><span>03 / 238</span><strong>LOOPS</strong></a><a class="cat"><span>04 / 151</span><strong>FX</strong></a><a class="cat"><span>05 / 87</span><strong>VOCALS</strong></a><a class="cat"><span>06 / 64</span><strong>MIDI</strong></a><a class="cat"><span>07 / 112</span><strong>PRESETS</strong></a></div>
+<div class="categories"><a class="cat" data-category="drums"><span>00</span><strong>DRUMS</strong></a><a class="cat" data-category="808"><span>00</span><strong>808</strong></a><a class="cat" data-category="loops"><span>00</span><strong>LOOPS</strong></a><a class="cat" data-category="fx"><span>00</span><strong>FX</strong></a><a class="cat" data-category="vocals"><span>00</span><strong>VOCALS</strong></a><a class="cat" data-category="midi"><span>00</span><strong>MIDI</strong></a><a class="cat" data-category="presets"><span>00</span><strong>PRESETS</strong></a></div>
 </section>
 
 <section id="packs" class="reveal">
 <div class="section-head"><div><p class="eyebrow">POPULAR COLLECTIONS</p><h2>Популярные паки</h2></div><a class="link" href="#">Все паки ↗</a></div>
-<div class="filters"><button class="active">Все</button><button>Бесплатные</button><select><option>Любой жанр</option><option>Dark Trap</option><option>Ambient</option><option>Lo‑Fi</option></select><select><option>Любой BPM</option><option>80–100</option><option>100–130</option><option>130–160</option></select><select><option>Тип звука</option><option>Drums</option><option>Loops</option><option>FX</option></select></div>
-<div class="packs" id="dynamicPacks">
-<article class="pack"><div class="pack-cover"><span class="price">FREE</span><h3>Void Drums<br>Vol. 01</h3></div><div class="pack-body"><div class="pack-tags"><span class="tag">DRUMS</span><span class="tag">DARK</span><span class="tag">WAV</span></div><div class="pack-info"><span>96 файлов</span><span>428 MB</span></div><div class="pack-actions"><button class="preview-btn">▶ Preview</button><button class="download">Скачать</button></div></div></article>
-<article class="pack"><div class="pack-cover"><span class="price">FREE</span><h3>Neon FX<br>Essentials</h3></div><div class="pack-body"><div class="pack-tags"><span class="tag">FX</span><span class="tag">ELECTRONIC</span><span class="tag">WAV</span></div><div class="pack-info"><span>74 файла</span><span>312 MB</span></div><div class="pack-actions"><button class="preview-btn">▶ Preview</button><button class="download">Скачать</button></div></div></article>
-<article class="pack"><div class="pack-cover"><span class="price">€9</span><h3>Broken Vocal<br>Fragments</h3></div><div class="pack-body"><div class="pack-tags"><span class="tag">VOCALS</span><span class="tag">140 BPM</span><span class="tag">WAV</span></div><div class="pack-info"><span>58 файлов</span><span>521 MB</span></div><div class="pack-actions"><button class="preview-btn">▶ Preview</button><button class="download">Получить</button></div></div></article>
-<article class="pack"><div class="pack-cover"><span class="price">€12</span><h3>Night Drive<br>Loops</h3></div><div class="pack-body"><div class="pack-tags"><span class="tag">LOOPS</span><span class="tag">SYNTHWAVE</span><span class="tag">MIDI</span></div><div class="pack-info"><span>82 файла</span><span>690 MB</span></div><div class="pack-actions"><button class="preview-btn">▶ Preview</button><button class="download">Получить</button></div></div></article>
-<article class="pack"><div class="pack-cover"><span class="price">€7</span><h3>Ghost 808<br>Collection</h3></div><div class="pack-body"><div class="pack-tags"><span class="tag">808</span><span class="tag">TRAP</span><span class="tag">WAV</span></div><div class="pack-info"><span>64 файла</span><span>184 MB</span></div><div class="pack-actions"><button class="preview-btn">▶ Preview</button><button class="download">Получить</button></div></div></article>
-<article class="pack"><div class="pack-cover"><span class="price">€14</span><h3>Ambient<br>Textures</h3></div><div class="pack-body"><div class="pack-tags"><span class="tag">AMBIENT</span><span class="tag">TEXTURES</span><span class="tag">WAV</span></div><div class="pack-info"><span>105 файлов</span><span>1.2 GB</span></div><div class="pack-actions"><button class="preview-btn">▶ Preview</button><button class="download">Получить</button></div></div></article>
-</div>
+<div class="filters"><button class="active" data-pack-filter="all">Все</button><button data-pack-filter="free">Бесплатные</button><select id="genreFilter"><option value="">Любой жанр</option><option value="Dark Trap">Dark Trap</option><option value="Ambient">Ambient</option><option value="Lo-Fi">Lo‑Fi</option></select><select id="bpmFilter"><option value="">Любой BPM</option><option value="80-100">80–100</option><option value="100-130">100–130</option><option value="130-160">130–160</option></select></div>
+<div class="packs" id="dynamicPacks"><div class="catalog-empty">Загружаем каталог…</div></div>
 </section>
 
 <section class="reveal">
 <div class="section-head"><div><p class="eyebrow">LISTEN BEFORE DOWNLOAD</p><h2>Превью сэмплов</h2></div><a class="link" href="#">Открыть библиотеку ↗</a></div>
-<div class="preview-list">
-<div class="preview"><button class="play">▶</button><div><strong>void_kick_07.wav</strong><br><span>Drums / Kick</span></div><span class="hide-mobile">140 BPM</span><span class="hide-mobile">C minor</span><div class="mini-wave"></div></div>
-<div class="preview"><button class="play">▶</button><div><strong>neon_riser_03.wav</strong><br><span>FX / Riser</span></div><span class="hide-mobile">128 BPM</span><span class="hide-mobile">F#</span><div class="mini-wave"></div></div>
-<div class="preview"><button class="play">▶</button><div><strong>ghost_808_long.wav</strong><br><span>Bass / 808</span></div><span class="hide-mobile">150 BPM</span><span class="hide-mobile">D</span><div class="mini-wave"></div></div>
-<div class="preview"><button class="play">▶</button><div><strong>broken_vocal_11.wav</strong><br><span>Vocals / Phrase</span></div><span class="hide-mobile">120 BPM</span><span class="hide-mobile">A minor</span><div class="mini-wave"></div></div>
-<div class="preview"><button class="play">▶</button><div><strong>midnight_loop_04.wav</strong><br><span>Loops / Synth</span></div><span class="hide-mobile">108 BPM</span><span class="hide-mobile">E minor</span><div class="mini-wave"></div></div>
-</div>
+<div class="preview-list" id="dynamicPreviews"><div class="catalog-empty compact">Превью появятся после публикации первого пака или трека.</div></div>
 </section>
 
 <section id="free" class="reveal">
-<div class="weekly"><div class="weekly-copy"><p class="eyebrow">FREE PACK OF THE WEEK</p><h2>STARTER<br>PACK 2026</h2><p>40 готовых звуков: kicks, snares, 808, textures и loops. Бесплатно для личных и коммерческих проектов — с понятной лицензией внутри архива.</p><div class="actions"><a class="btn primary" href="#">Скачать бесплатно</a><a class="btn ghost" href="#">Послушать превью</a></div></div><div class="weekly-art"><div class="box3d"><strong>STARTER<br>PACK<br>2026</strong></div></div></div>
+<div class="weekly" id="freePack"><div class="weekly-copy"><p class="eyebrow">FREE DOWNLOADS</p><h2>Пока пусто</h2><p>Бесплатные паки появятся здесь после публикации через админку.</p></div><div class="weekly-art weekly-empty"><strong>NOIRWAVE</strong></div></div>
 </section>
 
 <section class="reveal" id="about">
@@ -66,12 +53,12 @@
 
 <section id="tracks" class="reveal">
 <div class="section-head"><div><p class="eyebrow">MADE WITH THESE SOUNDS</p><h2>Треки автора</h2></div><a class="link" href="#">Все треки ↗</a></div>
-<div class="tracks" id="dynamicTracks"><article class="track"><div class="track-cover"></div><h3>After Midnight</h3><p>Dark Electronic · 128 BPM</p></article><article class="track"><div class="track-cover"></div><h3>Cold Signal</h3><p>Ambient · 92 BPM</p></article><article class="track"><div class="track-cover"></div><h3>Red Static</h3><p>Trap · 150 BPM</p></article><article class="track"><div class="track-cover"></div><h3>Silent District</h3><p>Synthwave · 116 BPM</p></article></div>
+<div class="tracks" id="dynamicTracks"><div class="catalog-empty">Загружаем треки…</div></div>
 </section>
 
 <section id="contacts" class="reveal"><div class="contact"><div><p class="eyebrow">CUSTOM SOUND DESIGN</p><h2>Нужен собственный пак?</h2><p>Можно заказать уникальные сэмплы, звуки под игру, видео, трек или коммерческий проект.</p></div><a class="btn primary" href="mailto:hello@example.com">Обсудить заказ</a></div></section>
 </main>
-<footer><span>© 2026 NOIRWAVE. Demo website.</span><div class="socials"><a href="#">Telegram</a><a href="#">VK</a><a href="#">YouTube</a><a href="#">SoundCloud</a></div></footer>
+<footer><span>© 2026 NOIRWAVE.</span><div class="socials"><a href="#">Telegram</a><a href="#">VK</a><a href="#">YouTube</a><a href="#">SoundCloud</a></div></footer>
 </div>
 
 <div class="auth-modal hidden" id="authModal">

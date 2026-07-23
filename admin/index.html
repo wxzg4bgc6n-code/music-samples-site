@@ -44,8 +44,8 @@
 
       <section class="view active" id="dashboardView">
         <div class="stats-grid">
-          <article><span>Sample Packs</span><strong id="packCount">0</strong><small>в демо-каталоге</small></article>
-          <article><span>Треки</span><strong id="trackCount">0</strong><small>в демо-каталоге</small></article>
+          <article><span>Sample Packs</span><strong id="packCount">0</strong><small>опубликовано</small></article>
+          <article><span>Треки</span><strong id="trackCount">0</strong><small>опубликовано</small></article>
           <article><span>Статус</span><strong class="status-ok">ONLINE</strong><small>Cloudflare Pages</small></article>
         </div>
 
@@ -59,14 +59,14 @@
           </article>
 
           <article class="panel">
-            <div class="panel-head"><div><p class="eyebrow">DEMO MODE</p><h3>Что уже работает</h3></div></div>
+            <div class="panel-head"><div><p class="eyebrow">LIVE STORAGE</p><h3>Что подключено</h3></div></div>
             <ul class="check-list">
-              <li>Добавление и редактирование карточек</li>
-              <li>Предпросмотр выбранной обложки</li>
-              <li>Сохранение данных в браузере</li>
-              <li>Отображение добавленного на главной странице</li>
+              <li>Общие материалы для всех администраторов</li>
+              <li>Файлы в закрытом Backblaze B2</li>
+              <li>Карточки и счётчики в Cloudflare D1</li>
+              <li>Скачивание только после входа</li>
             </ul>
-            <p class="note">Файлы пока не отправляются в интернет. Они только выбираются для предпросмотра. Настоящую загрузку подключим через R2.</p>
+            <p class="note"><span class="storage-dot" id="storageDot"></span><span id="storageStatus">Проверяем подключение B2…</span></p>
           </article>
         </div>
 
@@ -121,7 +121,8 @@
           <label>Контактный email<input value="hello@example.com"></label>
           <label>Валюта<select><option>EUR (€)</option><option>USD ($)</option><option>RUB (₽)</option></select></label>
           <button class="primary" type="button">Сохранить настройки</button>
-          <p class="note">В демо-версии настройки визуальные и не отправляются на сервер.</p>
+          <button class="ghost" id="storageSetupBtn" type="button">Проверить B2 и настроить загрузку</button>
+          <p class="note">Кнопка B2 безопасно настраивает доступ браузера к загрузке только с вашего сайта. Секретный ключ остаётся внутри Worker.</p>
         </div>
       </section>
     </main>
@@ -135,7 +136,7 @@
       <form id="packForm">
         <input type="hidden" id="packId">
         <div class="form-grid">
-          <label>Название<input id="packTitle" required placeholder="Void Drums Vol. 01"></label>
+          <label>Название<input id="packTitle" required placeholder="Название пака"></label>
           <label>Цена<input id="packPrice" placeholder="FREE или €9"></label>
           <label>Жанр<input id="packGenre" placeholder="Dark Trap"></label>
           <label>BPM<input id="packBpm" placeholder="140"></label>
@@ -147,6 +148,7 @@
           <label class="full">ZIP-архив<input id="packZip" type="file" accept=".zip,.rar,.7z"></label>
         </div>
         <div class="preview-card" id="packCoverPreview"><span>Предпросмотр обложки</span></div>
+        <div class="upload-state hidden" id="packUploadState"><span></span><div><i></i></div></div>
         <div class="form-actions">
           <button type="button" class="ghost" data-close>Отмена</button>
           <button class="primary" type="submit">Опубликовать</button>
@@ -163,7 +165,7 @@
       <form id="trackForm">
         <input type="hidden" id="trackId">
         <div class="form-grid">
-          <label>Название<input id="trackTitle" required placeholder="After Midnight"></label>
+          <label>Название<input id="trackTitle" required placeholder="Название трека"></label>
           <label>Исполнитель<input id="trackArtist" placeholder="NOIRWAVE"></label>
           <label>Жанр<input id="trackGenre" placeholder="Dark Electronic"></label>
           <label>BPM<input id="trackBpm" placeholder="128"></label>
@@ -172,6 +174,7 @@
           <label>MP3-файл<input id="trackAudio" type="file" accept="audio/*"></label>
         </div>
         <div class="preview-card" id="trackCoverPreview"><span>Предпросмотр обложки</span></div>
+        <div class="upload-state hidden" id="trackUploadState"><span></span><div><i></i></div></div>
         <div class="form-actions">
           <button type="button" class="ghost" data-close>Отмена</button>
           <button class="primary" type="submit">Опубликовать</button>

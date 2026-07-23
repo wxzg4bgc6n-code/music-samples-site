@@ -1,317 +1,595 @@
-const CONFIG=window.NOIRWAVE_CONFIG||{};
-const API_BASE=String(CONFIG.API_BASE||"").replace(/\/+$/,"");
-const GOOGLE_CLIENT_ID=String(CONFIG.GOOGLE_CLIENT_ID||"");
-const AUTH_TOKEN_KEY="noirwave_auth_token";
+const CONFIG = window.NOIRWAVE_CONFIG || {};
+const API_BASE = String(CONFIG.API_BASE || "").replace(/\/+$/, "");
+const GOOGLE_CLIENT_ID = String(CONFIG.GOOGLE_CLIENT_ID || "");
+const AUTH_TOKEN_KEY = "noirwave_auth_token";
+const $ = selector => document.querySelector(selector);
 
-const c=document.getElementById("particles"),x=c.getContext("2d");
-let ps=[];
-function rs(){
-  const d=devicePixelRatio||1;
-  c.width=innerWidth*d;c.height=innerHeight*d;
-  c.style.width=innerWidth+"px";c.style.height=innerHeight+"px";
-  x.setTransform(d,0,0,d,0,0);
-  ps=Array.from({length:Math.min(70,innerWidth/18)},()=>({
-    x:Math.random()*innerWidth,y:Math.random()*innerHeight,
-    r:Math.random()*1.3+.25,v:Math.random()*.2+.04
+const canvas = $("#particles");
+const context = canvas.getContext("2d");
+let particles = [];
+
+function resizeParticles() {
+  const density = devicePixelRatio || 1;
+  canvas.width = innerWidth * density;
+  canvas.height = innerHeight * density;
+  canvas.style.width = innerWidth + "px";
+  canvas.style.height = innerHeight + "px";
+  context.setTransform(density, 0, 0, density, 0, 0);
+  particles = Array.from({ length: Math.min(70, innerWidth / 18) }, () => ({
+    x: Math.random() * innerWidth,
+    y: Math.random() * innerHeight,
+    radius: Math.random() * 1.3 + .25,
+    velocity: Math.random() * .2 + .04
   }));
 }
-function ap(){
-  x.clearRect(0,0,innerWidth,innerHeight);
-  x.fillStyle="rgba(255,255,255,.22)";
-  ps.forEach(p=>{
-    p.y-=p.v;if(p.y<0)p.y=innerHeight;
-    x.beginPath();x.arc(p.x,p.y,p.r,0,7);x.fill();
+
+function animateParticles() {
+  context.clearRect(0, 0, innerWidth, innerHeight);
+  context.fillStyle = "rgba(255,255,255,.22)";
+  particles.forEach(particle => {
+    particle.y -= particle.velocity;
+    if (particle.y < 0) particle.y = innerHeight;
+    context.beginPath();
+    context.arc(particle.x, particle.y, particle.radius, 0, 7);
+    context.fill();
   });
-  requestAnimationFrame(ap);
+  requestAnimationFrame(animateParticles);
 }
-addEventListener("resize",rs);rs();ap();
 
-document.getElementById("menu")?.addEventListener("click",()=>{
-  document.getElementById("nav")?.classList.toggle("open");
-});
+addEventListener("resize", resizeParticles);
+resizeParticles();
+animateParticles();
 
-const io=new IntersectionObserver(es=>es.forEach(e=>{
-  if(e.isIntersecting)e.target.classList.add("show");
-}),{threshold:.12});
-document.querySelectorAll(".reveal").forEach(e=>io.observe(e));
+$("#menu")?.addEventListener("click", () => $("#nav")?.classList.toggle("open"));
 
-let counted=false;
-const co=new IntersectionObserver(([e])=>{
-  if(!e.isIntersecting||counted)return;
-  counted=true;
-  document.querySelectorAll("[data-count]").forEach(el=>{
-    const t=Number(el.dataset.count||0),s=performance.now();
-    function f(n){
-      const p=Math.min((n-s)/1300,1);
-      const v=Math.floor(t*(1-Math.pow(1-p,3)));
-      el.textContent=v+(t>=1000?"+":"");
-      if(p<1)requestAnimationFrame(f);
+const revealObserver = new IntersectionObserver(entries => entries.forEach(entry => {
+  if (entry.isIntersecting) entry.target.classList.add("show");
+}), { threshold: .12 });
+document.querySelectorAll(".reveal").forEach(element => revealObserver.observe(element));
+
+const wave = $(".wave");
+if (wave) {
+  const waveContext = wave.getContext("2d");
+  function resizeWave() {
+    const density = devicePixelRatio || 1;
+    wave.width = wave.clientWidth * density;
+    wave.height = wave.clientHeight * density;
+    waveContext.setTransform(density, 0, 0, density, 0, 0);
+  }
+  function drawWave(time = 0) {
+    const width = wave.clientWidth;
+    const height = wave.clientHeight;
+    waveContext.clearRect(0, 0, width, height);
+    waveContext.strokeStyle = "rgba(255,255,255,.65)";
+    waveContext.lineWidth = 1.4;
+    waveContext.beginPath();
+    for (let x = 0; x < width; x += 1) {
+      const y = height / 2 + Math.sin(x * .045 + time * .003) * 11 +
+        Math.sin(x * .014 + time * .0017) * 18;
+      x ? waveContext.lineTo(x, y) : waveContext.moveTo(x, y);
     }
-    requestAnimationFrame(f);
-  });
-},{threshold:.5});
-const statsBlock=document.querySelector(".stats");
-if(statsBlock)co.observe(statsBlock);
-
-function bars(el){
-  for(let i=0;i<24;i++){
-    const b=document.createElement("i");
-    b.style.height=(5+Math.random()*25)+"px";
-    el.appendChild(b);
+    waveContext.stroke();
+    requestAnimationFrame(drawWave);
   }
-}
-document.querySelectorAll(".mini-wave").forEach(bars);
-
-let ac,osc,gain,playing=false,timer,progress=0,currentButton=null;
-function stopTone(){
-  try{osc?.stop()}catch{}
-  playing=false;clearInterval(timer);
-  if(currentButton){
-    currentButton.textContent=currentButton.classList.contains("preview-btn")?"▶ Preview":"▶";
-  }
-  currentButton=null;
-}
-function tone(button,progressBar){
-  if(playing){stopTone();return}
-  ac=ac||new(window.AudioContext||window.webkitAudioContext)();
-  osc=ac.createOscillator();gain=ac.createGain();
-  osc.type="sine";osc.frequency.value=82+Math.random()*180;
-  gain.gain.setValueAtTime(.0001,ac.currentTime);
-  gain.gain.exponentialRampToValueAtTime(.05,ac.currentTime+.12);
-  gain.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+5);
-  osc.connect(gain).connect(ac.destination);osc.start();osc.stop(ac.currentTime+5);
-  playing=true;currentButton=button;button.textContent="❚❚";progress=0;
-  if(progressBar){
-    timer=setInterval(()=>{
-      progress+=2;progressBar.style.width=progress+"%";
-      if(progress>=100){clearInterval(timer);progressBar.style.width="0"}
-    },100);
-  }
-  osc.onended=()=>{
-    if(progressBar)progressBar.style.width="0";
-    if(currentButton===button){
-      playing=false;button.textContent=button.classList.contains("preview-btn")?"▶ Preview":"▶";
-      currentButton=null;
-    }
-  };
+  resizeWave();
+  addEventListener("resize", resizeWave);
+  drawWave();
 }
 
-const w=document.querySelector(".wave");
-if(w){
-  const wc=w.getContext("2d");
-  function rw(){
-    const d=devicePixelRatio||1;
-    w.width=w.clientWidth*d;w.height=w.clientHeight*d;
-    wc.setTransform(d,0,0,d,0,0);
-  }
-  rw();addEventListener("resize",rw);
-  function dw(t=0){
-    const W=w.clientWidth,H=w.clientHeight;
-    wc.clearRect(0,0,W,H);
-    wc.strokeStyle="rgba(255,255,255,.65)";wc.lineWidth=1.4;wc.beginPath();
-    for(let i=0;i<W;i++){
-      const y=H/2+Math.sin(i*.045+t*.003)*11+Math.sin(i*.014+t*.0017)*18;
-      i?wc.lineTo(i,y):wc.moveTo(i,y);
-    }
-    wc.stroke();requestAnimationFrame(dw);
-  }
-  dw();
-}
-
-// Материалы из демонстрационной админки пока хранятся в этом браузере.
-(function renderDemoContent(){
-  const esc=s=>String(s||"").replace(/[&<>"']/g,m=>({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
-  }[m]));
-  const packs=JSON.parse(localStorage.getItem("noirwave_packs")||"[]");
-  const tracks=JSON.parse(localStorage.getItem("noirwave_tracks")||"[]");
-
-  const packsRoot=document.getElementById("dynamicPacks");
-  if(packsRoot&&packs.length){
-    packs.forEach(p=>{
-      const card=document.createElement("article");
-      card.className="pack admin-added";
-      card.innerHTML=`<div class="pack-cover" style="${p.cover?`background-image:linear-gradient(rgba(0,0,0,.18),rgba(0,0,0,.35)),url('${p.cover}');background-size:cover;background-position:center`:''}">
-        <span class="price">${esc(p.price||"FREE")}</span><h3>${esc(p.title)}</h3></div>
-        <div class="pack-body"><div class="pack-tags"><span class="tag">${esc(p.genre||"PACK")}</span>${p.bpm?`<span class="tag">${esc(p.bpm)} BPM</span>`:""}<span class="tag">DEMO</span></div>
-        <div class="pack-info"><span>${esc(p.files||"?")} файлов</span><span>${esc(p.key||"")}</span></div>
-        <div class="pack-actions"><button class="preview-btn">▶ Preview</button><button class="download">${p.price==="FREE"?"Скачать":"Получить"}</button></div></div>`;
-      packsRoot.prepend(card);
-    });
-  }
-
-  const tracksRoot=document.getElementById("dynamicTracks");
-  if(tracksRoot&&tracks.length){
-    tracks.forEach(t=>{
-      const card=document.createElement("article");
-      card.className="track admin-added";
-      card.innerHTML=`<div class="track-cover" style="${t.cover?`background-image:url('${t.cover}');background-size:cover;background-position:center`:""}"></div><h3>${esc(t.title)}</h3><p>${esc(t.genre||"Track")}${t.bpm?" · "+esc(t.bpm)+" BPM":""}</p>`;
-      tracksRoot.prepend(card);
-    });
-  }
-})();
-
-const authState={
-  token:localStorage.getItem(AUTH_TOKEN_KEY)||"",
-  user:null,
-  ready:false
+const authState = {
+  token: localStorage.getItem(AUTH_TOKEN_KEY) || "",
+  user: null,
+  ready: false
 };
 
-const $=s=>document.querySelector(s);
-function toast(text){
-  const el=$("#toast");if(!el)return;
-  el.textContent=text;el.classList.remove("hidden");
+const catalogState = {
+  items: [],
+  filter: "all",
+  genre: "",
+  bpm: ""
+};
+
+let currentAudio = null;
+let currentPlayButton = null;
+
+function esc(value = "") {
+  return String(value).replace(/[&<>"']/g, char => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
+  }[char]));
+}
+
+function toast(text) {
+  const element = $("#toast");
+  if (!element) return;
+  element.textContent = text;
+  element.classList.remove("hidden");
   clearTimeout(window.__toastTimer);
-  window.__toastTimer=setTimeout(()=>el.classList.add("hidden"),3400);
+  window.__toastTimer = setTimeout(() => element.classList.add("hidden"), 3400);
 }
-function setAuthMessage(text="",success=false){
-  const el=$("#authMessage");if(!el)return;
-  el.textContent=text;el.classList.toggle("success",success);
+
+function setAuthMessage(text = "", success = false) {
+  const element = $("#authMessage");
+  if (!element) return;
+  element.textContent = text;
+  element.classList.toggle("success", success);
 }
-function openAuth(){
+
+function openAuth() {
   $("#authModal")?.classList.remove("hidden");
-  document.body.style.overflow="hidden";
+  document.body.style.overflow = "hidden";
   renderAccountModal();
 }
-function closeAuth(){
+
+function closeAuth() {
   $("#authModal")?.classList.add("hidden");
-  document.body.style.overflow="";
+  document.body.style.overflow = "";
 }
-function renderHeader(){
-  const btn=$("#accountBtn"),nav=$("#adminNav");
-  if(btn){
-    btn.classList.toggle("loading",!authState.ready);
-    btn.textContent=authState.user?authState.user.name:authState.ready?"Войти":"Проверка…";
+
+function renderHeader() {
+  const button = $("#accountBtn");
+  const adminLink = $("#adminNav");
+  if (button) {
+    button.classList.toggle("loading", !authState.ready);
+    button.textContent = authState.user ? authState.user.name : authState.ready ? "Войти" : "Проверка…";
   }
-  if(nav){
-    nav.classList.toggle("hidden",!authState.user||!["admin","owner"].includes(authState.user.role));
+  if (adminLink) {
+    adminLink.classList.toggle(
+      "hidden",
+      !authState.user || !["admin", "owner"].includes(authState.user.role)
+    );
   }
-  document.querySelectorAll(".download").forEach(button=>{
-    button.classList.toggle("locked",!authState.user);
+  document.querySelectorAll("[data-download]").forEach(button => {
+    button.classList.toggle("locked", !authState.user);
   });
 }
-function renderAccountModal(){
-  const guest=$("#authGuestView"),account=$("#accountView");
-  if(authState.user){
-    guest?.classList.add("hidden");account?.classList.remove("hidden");
-    $("#accountName").textContent=authState.user.name;
-    $("#accountEmail").textContent=authState.user.email;
-    $("#accountRole").textContent=authState.user.role.toUpperCase();
-    $("#accountAdminLink")?.classList.toggle("hidden",!["admin","owner"].includes(authState.user.role));
-    const avatar=$("#accountAvatar");
-    if(avatar&&authState.user.avatar_url){
-      avatar.src=authState.user.avatar_url;avatar.classList.remove("hidden");
-    }else avatar?.classList.add("hidden");
-  }else{
-    account?.classList.add("hidden");guest?.classList.remove("hidden");
+
+function renderAccountModal() {
+  const guest = $("#authGuestView");
+  const account = $("#accountView");
+  if (authState.user) {
+    guest?.classList.add("hidden");
+    account?.classList.remove("hidden");
+    $("#accountName").textContent = authState.user.name;
+    $("#accountEmail").textContent = authState.user.email;
+    $("#accountRole").textContent = authState.user.role.toUpperCase();
+    $("#accountAdminLink")?.classList.toggle(
+      "hidden",
+      !["admin", "owner"].includes(authState.user.role)
+    );
+    const avatar = $("#accountAvatar");
+    if (avatar && authState.user.avatar_url) {
+      avatar.src = authState.user.avatar_url;
+      avatar.classList.remove("hidden");
+    } else {
+      avatar?.classList.add("hidden");
+    }
+  } else {
+    account?.classList.add("hidden");
+    guest?.classList.remove("hidden");
   }
 }
-async function api(path,options={}){
-  if(!API_BASE)throw new Error("Не указан адрес API");
-  const headers=new Headers(options.headers||{});
-  if(options.body&&!headers.has("Content-Type"))headers.set("Content-Type","application/json");
-  if(authState.token)headers.set("Authorization",`Bearer ${authState.token}`);
-  const response=await fetch(API_BASE+path,{...options,headers});
-  let data={};
-  try{data=await response.json()}catch{}
-  if(!response.ok){
-    const error=new Error(data.error||`Ошибка API: ${response.status}`);
-    error.status=response.status;throw error;
+
+async function api(path, options = {}) {
+  if (!API_BASE) throw new Error("Не указан адрес API");
+  const headers = new Headers(options.headers || {});
+  if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  if (authState.token) headers.set("Authorization", `Bearer ${authState.token}`);
+  const response = await fetch(API_BASE + path, { ...options, headers });
+  let data = {};
+  try { data = await response.json(); } catch {}
+  if (!response.ok) {
+    const error = new Error(data.error || `Ошибка API: ${response.status}`);
+    error.status = response.status;
+    throw error;
   }
   return data;
 }
-async function restoreSession(){
-  if(!authState.token){
-    authState.ready=true;renderHeader();return;
+
+async function restoreSession() {
+  if (!authState.token) {
+    authState.ready = true;
+    renderHeader();
+    return;
   }
-  try{
-    const data=await api("/api/auth/me");
-    authState.user=data.user;
-  }catch(error){
-    if(error.status===401||error.status===403){
-      authState.token="";localStorage.removeItem(AUTH_TOKEN_KEY);
-    }else{
+  try {
+    const data = await api("/api/auth/me");
+    authState.user = data.user;
+  } catch (error) {
+    if (error.status === 401 || error.status === 403) {
+      authState.token = "";
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+    } else {
       toast("Не удалось проверить вход. Попробуйте обновить страницу.");
     }
-  }finally{
-    authState.ready=true;renderHeader();renderAccountModal();
+  } finally {
+    authState.ready = true;
+    renderHeader();
+    renderAccountModal();
   }
 }
-async function handleGoogleCredential(response){
-  if(!response?.credential)return;
+
+async function handleGoogleCredential(response) {
+  if (!response?.credential) return;
   setAuthMessage("Выполняется вход…");
-  try{
-    const data=await api("/api/auth/google",{
-      method:"POST",
-      body:JSON.stringify({credential:response.credential})
+  try {
+    const data = await api("/api/auth/google", {
+      method: "POST",
+      body: JSON.stringify({ credential: response.credential })
     });
-    authState.token=data.token;
-    authState.user=data.user;
-    localStorage.setItem(AUTH_TOKEN_KEY,data.token);
-    authState.ready=true;
-    renderHeader();renderAccountModal();
-    setAuthMessage("",true);
-    toast(data.user.role==="owner"?"Вы вошли как владелец сайта":"Аккаунт создан. Вы вошли через Google");
-  }catch(error){
-    setAuthMessage(error.message||"Не удалось войти через Google");
+    authState.token = data.token;
+    authState.user = data.user;
+    localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+    authState.ready = true;
+    renderHeader();
+    renderAccountModal();
+    setAuthMessage("", true);
+    toast(data.user.role === "owner" ? "Вы вошли как владелец сайта" : "Вы вошли через Google");
+  } catch (error) {
+    setAuthMessage(error.message || "Не удалось войти через Google");
   }
 }
-function initGoogleButton(){
-  const target=$("#googleSignInButton");
-  if(!target||!GOOGLE_CLIENT_ID)return;
-  if(!window.google?.accounts?.id){
-    setTimeout(initGoogleButton,250);return;
+
+function initGoogleButton() {
+  const target = $("#googleSignInButton");
+  if (!target || !GOOGLE_CLIENT_ID) return;
+  if (!window.google?.accounts?.id) {
+    setTimeout(initGoogleButton, 250);
+    return;
   }
   window.google.accounts.id.initialize({
-    client_id:GOOGLE_CLIENT_ID,
-    callback:handleGoogleCredential,
-    auto_select:false,
-    cancel_on_tap_outside:true
+    client_id: GOOGLE_CLIENT_ID,
+    callback: handleGoogleCredential,
+    auto_select: false,
+    cancel_on_tap_outside: true
   });
-  target.innerHTML="";
-  window.google.accounts.id.renderButton(target,{
-    type:"standard",
-    theme:"filled_black",
-    size:"large",
-    text:"continue_with",
-    shape:"pill",
-    width:340,
-    locale:"ru"
+  target.innerHTML = "";
+  window.google.accounts.id.renderButton(target, {
+    type: "standard",
+    theme: "filled_black",
+    size: "large",
+    text: "continue_with",
+    shape: "pill",
+    width: 340,
+    locale: "ru"
   });
 }
 
-$("#accountBtn")?.addEventListener("click",()=>{
-  document.getElementById("nav")?.classList.remove("open");
+function formatBytes(bytes) {
+  const value = Number(bytes || 0);
+  if (!value) return "";
+  const units = ["Б", "КБ", "МБ", "ГБ"];
+  let size = value;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+  return `${size >= 10 || unit === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[unit]}`;
+}
+
+function miniWave() {
+  return Array.from({ length: 24 }, (_, index) =>
+    `<i style="height:${7 + ((index * 17) % 24)}px"></i>`).join("");
+}
+
+function packCard(item) {
+  const coverStyle = item.cover_url
+    ? `background-image:linear-gradient(rgba(0,0,0,.18),rgba(0,0,0,.38)),url('${esc(item.cover_url)}');background-size:cover;background-position:center`
+    : "";
+  return `<article class="pack">
+    <div class="pack-cover" style="${coverStyle}">
+      <span class="price">${esc(item.price || "FREE")}</span><h3>${esc(item.title)}</h3>
+    </div>
+    <div class="pack-body">
+      <div class="pack-tags">
+        ${item.genre ? `<span class="tag">${esc(item.genre)}</span>` : ""}
+        ${item.bpm ? `<span class="tag">${esc(item.bpm)} BPM</span>` : ""}
+        <span class="tag">PACK</span>
+      </div>
+      <div class="pack-info">
+        <span>${item.files ? `${esc(item.files)} файлов` : "Sample Pack"}</span>
+        <span>${item.key ? esc(item.key) : `${item.downloads} скачиваний`}</span>
+      </div>
+      <div class="pack-actions">
+        <button class="preview-btn" data-play="${item.id}" ${item.preview_url ? "" : "disabled"}>▶ Preview</button>
+        <button class="download" data-download="${item.id}">Скачать</button>
+      </div>
+    </div>
+  </article>`;
+}
+
+function trackCard(item) {
+  const coverStyle = item.cover_url
+    ? `background-image:url('${esc(item.cover_url)}');background-size:cover;background-position:center`
+    : "";
+  return `<article class="track">
+    <div class="track-cover" style="${coverStyle}">
+      <button class="track-play" data-play="${item.id}" aria-label="Воспроизвести">▶</button>
+    </div>
+    <h3>${esc(item.title)}</h3>
+    <p>${esc(item.artist || "NOIRWAVE")}${item.genre ? " · " + esc(item.genre) : ""}${item.bpm ? " · " + esc(item.bpm) + " BPM" : ""}</p>
+    <small>${item.listens} прослушиваний</small>
+  </article>`;
+}
+
+function previewRow(item) {
+  const label = item.type === "pack" ? "Превью пака" : item.artist || "Трек";
+  return `<div class="preview">
+    <button class="play" data-play="${item.id}">▶</button>
+    <div><strong>${esc(item.title)}</strong><br><span>${esc(label)}</span></div>
+    <span class="hide-mobile">${item.bpm ? esc(item.bpm) + " BPM" : "—"}</span>
+    <span class="hide-mobile">${item.key ? esc(item.key) : "—"}</span>
+    <div class="mini-wave">${miniWave()}</div>
+  </div>`;
+}
+
+function filteredPacks() {
+  let packs = catalogState.items.filter(item => item.type === "pack");
+  if (catalogState.filter === "free") {
+    packs = packs.filter(item => String(item.price || "").toUpperCase() === "FREE" || item.price === "0");
+  }
+  if (catalogState.genre) {
+    packs = packs.filter(item => item.genre.toLowerCase().includes(catalogState.genre.toLowerCase()));
+  }
+  if (catalogState.bpm) {
+    const [min, max] = catalogState.bpm.split("-").map(Number);
+    packs = packs.filter(item => {
+      const bpm = Number(item.bpm);
+      return bpm && bpm >= min && bpm <= max;
+    });
+  }
+  return packs;
+}
+
+function renderCatalog() {
+  const packs = filteredPacks();
+  const tracks = catalogState.items.filter(item => item.type === "track");
+  const playable = catalogState.items.filter(item =>
+    item.type === "track" ? item.audio_url : item.preview_url
+  );
+
+  $("#dynamicPacks").innerHTML = packs.length
+    ? packs.map(packCard).join("")
+    : '<div class="catalog-empty">Пока ничего не опубликовано.</div>';
+  $("#dynamicTracks").innerHTML = tracks.length
+    ? tracks.map(trackCard).join("")
+    : '<div class="catalog-empty">Пока ничего не опубликовано.</div>';
+  $("#dynamicPreviews").innerHTML = playable.length
+    ? playable.map(previewRow).join("")
+    : '<div class="catalog-empty compact">Превью появятся после публикации первого пака или трека.</div>';
+
+  const totalFiles = catalogState.items
+    .filter(item => item.type === "pack")
+    .reduce((sum, item) => sum + (Number.parseInt(item.files, 10) || 0), 0);
+  $("#sampleStat").textContent = totalFiles;
+  $("#packStat").textContent = catalogState.items.filter(item => item.type === "pack").length;
+  $("#trackStat").textContent = tracks.length;
+
+  renderFeatured(catalogState.items.find(item => item.type === "pack"));
+  renderFreePack(catalogState.items.find(item =>
+    item.type === "pack" &&
+    (String(item.price || "").toUpperCase() === "FREE" || item.price === "0")
+  ));
+  updateCategoryCounts();
+  renderHeader();
+}
+
+function renderFeatured(item) {
+  const root = $("#featured");
+  if (!root) return;
+  if (!item) {
+    root.classList.add("featured-empty");
+    $("#featuredBadge").textContent = "КАТАЛОГ ГОТОВ";
+    $("#featuredTitle").textContent = "Пока нет опубликованных паков";
+    $("#featuredName").textContent = "Первый пак появится здесь";
+    $("#featuredMeta").textContent = "Загрузите его через админку";
+    $("#featuredPlay").disabled = true;
+    return;
+  }
+  root.classList.remove("featured-empty");
+  $("#featuredBadge").textContent = "NEW PACK";
+  $("#featuredTitle").textContent = item.title;
+  $("#featuredName").textContent = item.title;
+  $("#featuredMeta").textContent = [
+    item.files ? `${item.files} файлов` : "",
+    item.genre,
+    item.bpm ? `${item.bpm} BPM` : ""
+  ].filter(Boolean).join(" · ");
+  $("#featuredPlay").dataset.play = item.id;
+  $("#featuredPlay").disabled = !item.preview_url;
+  const art = root.querySelector(".art");
+  if (item.cover_url) {
+    art.style.backgroundImage =
+      `linear-gradient(rgba(0,0,0,.28),rgba(0,0,0,.48)),url('${item.cover_url}')`;
+    art.style.backgroundSize = "cover";
+    art.style.backgroundPosition = "center";
+  }
+}
+
+function renderFreePack(item) {
+  const root = $("#freePack");
+  if (!root) return;
+  if (!item) {
+    root.innerHTML = `<div class="weekly-copy">
+      <p class="eyebrow">FREE DOWNLOADS</p>
+      <h2>Пока пусто</h2>
+      <p>Бесплатные паки появятся здесь после публикации через админку.</p>
+    </div><div class="weekly-art weekly-empty"><strong>NOIRWAVE</strong></div>`;
+    return;
+  }
+  root.innerHTML = `<div class="weekly-copy">
+    <p class="eyebrow">FREE DOWNLOAD</p>
+    <h2>${esc(item.title)}</h2>
+    <p>${esc(item.description || "Бесплатный авторский Sample Pack.")}</p>
+    <div class="actions">
+      <button class="btn primary" data-download="${item.id}">Скачать бесплатно</button>
+      <button class="btn ghost" data-play="${item.id}" ${item.preview_url ? "" : "disabled"}>Послушать превью</button>
+    </div>
+  </div><div class="weekly-art" style="${item.cover_url ? `background-image:linear-gradient(rgba(0,0,0,.2),rgba(0,0,0,.35)),url('${esc(item.cover_url)}');background-size:cover;background-position:center` : ""}">
+    <div class="box3d"><strong>${esc(item.title)}</strong></div>
+  </div>`;
+}
+
+function updateCategoryCounts() {
+  document.querySelectorAll("[data-category]").forEach(element => {
+    const category = element.dataset.category.toLowerCase();
+    const count = catalogState.items.filter(item =>
+      item.type === "pack" &&
+      `${item.genre} ${item.title} ${item.description}`.toLowerCase().includes(category)
+    ).length;
+    element.querySelector("span").textContent = String(count).padStart(2, "0");
+  });
+}
+
+async function loadCatalog() {
+  try {
+    const data = await api("/api/content");
+    catalogState.items = Array.isArray(data.items) ? data.items : [];
+    renderCatalog();
+  } catch (error) {
+    $("#dynamicPacks").innerHTML =
+      `<div class="catalog-empty error">${esc(error.message || "Не удалось загрузить каталог")}</div>`;
+    $("#dynamicTracks").innerHTML =
+      '<div class="catalog-empty error">Треки временно недоступны.</div>';
+    toast("Не удалось загрузить каталог");
+  }
+}
+
+function findItem(id) {
+  return catalogState.items.find(item => item.id === id);
+}
+
+function stopAudio() {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.src = "";
+  }
+  if (currentPlayButton) {
+    currentPlayButton.textContent = currentPlayButton.classList.contains("preview-btn")
+      ? "▶ Preview" : "▶";
+    currentPlayButton.classList.remove("playing");
+  }
+  currentAudio = null;
+  currentPlayButton = null;
+}
+
+async function playItem(item, button) {
+  if (currentPlayButton === button) {
+    stopAudio();
+    return;
+  }
+  stopAudio();
+  const source = item.type === "track" ? item.audio_url : item.preview_url;
+  if (!source) {
+    toast("Для этого материала ещё нет аудиопревью");
+    return;
+  }
+  currentAudio = new Audio(source);
+  currentPlayButton = button;
+  button.textContent = "❚❚";
+  button.classList.add("playing");
+  currentAudio.addEventListener("ended", stopAudio, { once: true });
+  currentAudio.addEventListener("error", () => {
+    stopAudio();
+    toast("Не удалось открыть аудиофайл");
+  }, { once: true });
+  try {
+    await currentAudio.play();
+    api(`/api/content/${item.id}/listen`, { method: "POST", body: "{}" }).catch(() => {});
+  } catch {
+    stopAudio();
+    toast("Браузер не разрешил воспроизведение");
+  }
+}
+
+async function downloadPack(item) {
+  if (!authState.user) {
+    openAuth();
+    toast("Для скачивания войдите через Google");
+    return;
+  }
+  try {
+    toast("Готовим защищённую ссылку…");
+    const data = await api(`/api/content/${item.id}/download`, {
+      method: "POST",
+      body: "{}"
+    });
+    const anchor = document.createElement("a");
+    anchor.href = data.url;
+    anchor.download = data.filename || "";
+    anchor.rel = "noopener";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  } catch (error) {
+    if (error.status === 401) {
+      authState.user = null;
+      authState.token = "";
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      renderHeader();
+      openAuth();
+    }
+    toast(error.message || "Не удалось начать скачивание");
+  }
+}
+
+document.addEventListener("click", event => {
+  const playButton = event.target.closest("[data-play]");
+  if (playButton) {
+    event.preventDefault();
+    const item = findItem(playButton.dataset.play);
+    if (item) playItem(item, playButton);
+    return;
+  }
+  const downloadButton = event.target.closest("[data-download]");
+  if (downloadButton) {
+    event.preventDefault();
+    const item = findItem(downloadButton.dataset.download);
+    if (item) downloadPack(item);
+  }
+});
+
+document.querySelectorAll("[data-pack-filter]").forEach(button => {
+  button.addEventListener("click", () => {
+    document.querySelectorAll("[data-pack-filter]").forEach(item => item.classList.remove("active"));
+    button.classList.add("active");
+    catalogState.filter = button.dataset.packFilter;
+    renderCatalog();
+  });
+});
+
+$("#genreFilter")?.addEventListener("change", event => {
+  catalogState.genre = event.target.value;
+  renderCatalog();
+});
+$("#bpmFilter")?.addEventListener("change", event => {
+  catalogState.bpm = event.target.value;
+  renderCatalog();
+});
+
+$("#accountBtn")?.addEventListener("click", () => {
+  $("#nav")?.classList.remove("open");
   openAuth();
 });
-$("#authClose")?.addEventListener("click",closeAuth);
-$("#authModal")?.addEventListener("click",e=>{if(e.target.id==="authModal")closeAuth()});
-$("#logoutPublic")?.addEventListener("click",async()=>{
-  try{if(authState.token)await api("/api/auth/logout",{method:"POST"})}catch{}
-  authState.token="";authState.user=null;
+$("#authClose")?.addEventListener("click", closeAuth);
+$("#authModal")?.addEventListener("click", event => {
+  if (event.target.id === "authModal") closeAuth();
+});
+$("#logoutPublic")?.addEventListener("click", async () => {
+  try {
+    if (authState.token) await api("/api/auth/logout", { method: "POST" });
+  } catch {}
+  authState.token = "";
+  authState.user = null;
   localStorage.removeItem(AUTH_TOKEN_KEY);
-  renderHeader();renderAccountModal();closeAuth();
+  renderHeader();
+  renderAccountModal();
+  closeAuth();
   window.google?.accounts?.id?.disableAutoSelect();
   toast("Вы вышли из аккаунта");
 });
 
-document.addEventListener("click",e=>{
-  const main=e.target.closest(".main-play");
-  if(main){tone(main,document.querySelector(".progress i"));return}
-  const play=e.target.closest(".play,.preview-btn");
-  if(play){tone(play);return}
-
-  const download=e.target.closest(".download");
-  if(download){
-    e.preventDefault();
-    if(!authState.user){
-      openAuth();toast("Для скачивания войдите через Google");
-      return;
-    }
-    toast("Доступ подтверждён. Сам файл подключим после настройки R2.");
-  }
-});
-
 renderHeader();
 restoreSession();
-window.addEventListener("load",initGoogleButton);
+loadCatalog();
+window.addEventListener("load", initGoogleButton);
