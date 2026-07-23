@@ -110,65 +110,70 @@ async function route(request, env, ctx) {
 
 function ensureSchema(env) {
   if (!schemaReady) {
-    schemaReady = env.DB.exec(`
-      CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
-        google_sub TEXT UNIQUE NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        name TEXT NOT NULL,
-        avatar_url TEXT,
-        role TEXT NOT NULL DEFAULT 'user',
-        status TEXT NOT NULL DEFAULT 'active',
-        email_verified INTEGER NOT NULL DEFAULT 0,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS sessions (
-        token_hash TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        expires_at INTEGER NOT NULL,
-        created_at INTEGER NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-      );
-      CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
-      CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
-      CREATE TABLE IF NOT EXISTS content (
-        id TEXT PRIMARY KEY,
-        type TEXT NOT NULL CHECK(type IN ('pack','track')),
-        title TEXT NOT NULL,
-        artist TEXT,
-        price TEXT,
-        genre TEXT,
-        bpm TEXT,
-        musical_key TEXT,
-        file_count TEXT,
-        description TEXT,
-        cover_key TEXT,
-        cover_name TEXT,
-        cover_mime TEXT,
-        cover_size INTEGER NOT NULL DEFAULT 0,
-        preview_key TEXT,
-        preview_name TEXT,
-        preview_mime TEXT,
-        preview_size INTEGER NOT NULL DEFAULT 0,
-        archive_key TEXT,
-        archive_name TEXT,
-        archive_mime TEXT,
-        archive_size INTEGER NOT NULL DEFAULT 0,
-        audio_key TEXT,
-        audio_name TEXT,
-        audio_mime TEXT,
-        audio_size INTEGER NOT NULL DEFAULT 0,
-        listens INTEGER NOT NULL DEFAULT 0,
-        downloads INTEGER NOT NULL DEFAULT 0,
-        status TEXT NOT NULL DEFAULT 'published',
-        created_by TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS idx_content_type_created ON content(type, created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_content_status ON content(status);
-    `).catch(error => {
+    schemaReady = (async () => {
+      const statements = [
+        `CREATE TABLE IF NOT EXISTS users (
+          id TEXT PRIMARY KEY,
+          google_sub TEXT UNIQUE NOT NULL,
+          email TEXT UNIQUE NOT NULL,
+          name TEXT NOT NULL,
+          avatar_url TEXT,
+          role TEXT NOT NULL DEFAULT 'user',
+          status TEXT NOT NULL DEFAULT 'active',
+          email_verified INTEGER NOT NULL DEFAULT 0,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        )`,
+        `CREATE TABLE IF NOT EXISTS sessions (
+          token_hash TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          expires_at INTEGER NOT NULL,
+          created_at INTEGER NOT NULL,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )`,
+        "CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)",
+        `CREATE TABLE IF NOT EXISTS content (
+          id TEXT PRIMARY KEY,
+          type TEXT NOT NULL CHECK(type IN ('pack','track')),
+          title TEXT NOT NULL,
+          artist TEXT,
+          price TEXT,
+          genre TEXT,
+          bpm TEXT,
+          musical_key TEXT,
+          file_count TEXT,
+          description TEXT,
+          cover_key TEXT,
+          cover_name TEXT,
+          cover_mime TEXT,
+          cover_size INTEGER NOT NULL DEFAULT 0,
+          preview_key TEXT,
+          preview_name TEXT,
+          preview_mime TEXT,
+          preview_size INTEGER NOT NULL DEFAULT 0,
+          archive_key TEXT,
+          archive_name TEXT,
+          archive_mime TEXT,
+          archive_size INTEGER NOT NULL DEFAULT 0,
+          audio_key TEXT,
+          audio_name TEXT,
+          audio_mime TEXT,
+          audio_size INTEGER NOT NULL DEFAULT 0,
+          listens INTEGER NOT NULL DEFAULT 0,
+          downloads INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'published',
+          created_by TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        )`,
+        "CREATE INDEX IF NOT EXISTS idx_content_type_created ON content(type, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_content_status ON content(status)"
+      ];
+      for (const statement of statements) {
+        await env.DB.prepare(statement).run();
+      }
+    })().catch(error => {
       schemaReady = null;
       throw error;
     });
@@ -566,13 +571,31 @@ async function redirectToMedia(request, env, id, kind) {
 async function createDownload(request, env, id) {
   await requireUser(request, env);
   const row = await env.DB.prepare(
-    "SELECT archive_key, archive_name FROM content WHERE id = ? AND type = 'pack' AND status = 'published'"
+    `SELECT type, archive_key, archive_name, audio_key, audio_name
+     FROM content
+     WHERE id = ? AND status = 'published'`
   ).bind(id).first();
-  if (!row?.archive_key) return json({ error: "Архив не найден" }, 404, request, env);
+  if (!row) return json({ error: "Материал не найден" }, 404, request, env);
+
+  const objectKey = row.type === "pack" ? row.archive_key : row.audio_key;
+  const filename = row.type === "pack"
+    ? (row.archive_name || "noirwave-pack.zip")
+    : (row.audio_name || "noirwave-track.mp3");
+
+  if (!objectKey) {
+    return json(
+      { error: row.type === "pack" ? "Архив не найден" : "Аудиофайл не найден" },
+      404,
+      request,
+      env
+    );
+  }
 
   await env.DB.prepare("UPDATE content SET downloads = downloads + 1 WHERE id = ?").bind(id).run();
-  const url = await presignObject(env, "GET", row.archive_key, 10 * 60);
-  return json({ url, filename: row.archive_name || "noirwave-pack.zip" }, 200, request, env);
+  const url = await presignObject(env, "GET", objectKey, 10 * 60, {
+    "response-content-disposition": `attachment; filename="${safeFileName(filename)}"`
+  });
+  return json({ url, filename }, 200, request, env);
 }
 
 async function configureBucketCors(env) {
@@ -604,7 +627,7 @@ async function deleteObject(env, key) {
   if (!response.ok && response.status !== 404) throw new Error(`B2 delete: ${response.status}`);
 }
 
-async function presignObject(env, method, key, expires) {
+async function presignObject(env, method, key, expires, extraParams = {}) {
   assertB2Env(env);
   const endpoint = new URL(env.B2_ENDPOINT);
   const region = b2Region(endpoint.hostname);
@@ -621,6 +644,9 @@ async function presignObject(env, method, key, expires) {
     ["X-Amz-Expires", String(expires)],
     ["X-Amz-SignedHeaders", "host"]
   ]);
+  for (const [name, value] of Object.entries(extraParams)) {
+    params.set(name, String(value));
+  }
   const canonicalQuery = queryString(params);
   const canonicalRequest = [
     method,
@@ -648,13 +674,17 @@ async function signedFetch(env, method, url, body = "", contentType = "applicati
   const now = new Date();
   const amzDate = awsDate(now);
   const dateStamp = amzDate.slice(0, 8);
-  const payloadHash = await sha256Hex(body);
+  const payloadBytes = typeof body === "string" ? textBytes(body) : body;
+  const payloadDigest = await sha256Bytes(payloadBytes);
+  const payloadHash = bytesToHex(payloadDigest);
+  const checksumSha256 = bytesToBase64(payloadDigest);
   const canonicalHeaders =
     `content-type:${contentType}\n` +
     `host:${target.host}\n` +
+    `x-amz-checksum-sha256:${checksumSha256}\n` +
     `x-amz-content-sha256:${payloadHash}\n` +
     `x-amz-date:${amzDate}\n`;
-  const signedHeaders = "content-type;host;x-amz-content-sha256;x-amz-date";
+  const signedHeaders = "content-type;host;x-amz-checksum-sha256;x-amz-content-sha256;x-amz-date";
   const canonicalRequest = [
     method,
     target.pathname,
@@ -680,6 +710,7 @@ async function signedFetch(env, method, url, body = "", contentType = "applicati
     method,
     headers: {
       "Content-Type": contentType,
+      "x-amz-checksum-sha256": checksumSha256,
       "x-amz-content-sha256": payloadHash,
       "x-amz-date": amzDate,
       Authorization: authorization
@@ -731,7 +762,11 @@ async function hmac(key, data) {
 
 async function sha256Hex(data) {
   const bytes = typeof data === "string" ? textBytes(data) : data;
-  return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)));
+  return bytesToHex(await sha256Bytes(bytes));
+}
+
+async function sha256Bytes(data) {
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", data));
 }
 
 function awsDate(date) {
@@ -824,6 +859,12 @@ function textBytes(value) {
 
 function bytesToHex(bytes) {
   return [...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function bytesToBase64(bytes) {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
 }
 
 function escapeXml(value) {

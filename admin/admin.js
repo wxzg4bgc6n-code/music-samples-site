@@ -231,7 +231,7 @@ function row(item) {
     </div>
     <div class="meta">
       <span>${esc(mainAsset?.name || "Файл не выбран")}</span>
-      <span>${formatBytes(mainAsset?.size)}${isPack ? ` · ${item.downloads} скачиваний` : ""}</span>
+      <span>${formatBytes(mainAsset?.size)} · ${item.downloads} скачиваний</span>
     </div>
     <div class="row-actions">
       <button onclick="editItem('${item.type}','${item.id}')">Редактировать</button>

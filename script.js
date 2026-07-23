@@ -91,6 +91,9 @@ const catalogState = {
 
 let currentAudio = null;
 let currentPlayButton = null;
+let currentPlayerId = "";
+let playerVolume = Math.max(0, Math.min(1, Number(localStorage.getItem("noirwave_volume") || .8)));
+let coversHidden = localStorage.getItem("noirwave_hide_track_covers") === "1";
 
 function esc(value = "") {
   return String(value).replace(/[&<>"']/g, char => ({
@@ -302,13 +305,31 @@ function trackCard(item) {
   const coverStyle = item.cover_url
     ? `background-image:url('${esc(item.cover_url)}');background-size:cover;background-position:center`
     : "";
-  return `<article class="track">
-    <div class="track-cover" style="${coverStyle}">
-      <button class="track-play" data-play="${item.id}" aria-label="Воспроизвести">▶</button>
+  return `<article class="track track-card" data-track="${item.id}">
+    <div class="track-cover" style="${coverStyle}"></div>
+    <div class="track-player">
+      <div class="track-player-head">
+        <button class="track-play" data-play="${item.id}" aria-label="Воспроизвести">▶</button>
+        <div class="track-title">
+          <h3>${esc(item.title)}</h3>
+          <p>${esc(item.artist || "NOIRWAVE")}${item.genre ? " · " + esc(item.genre) : ""}</p>
+        </div>
+        <button class="track-download" data-download="${item.id}" title="Скачать трек">
+          <b>↓</b><span data-download-count="${item.id}">${item.downloads}</span>
+        </button>
+      </div>
+      <div class="track-timeline">
+        <span data-current-time="${item.id}">0:00</span>
+        <input data-seek="${item.id}" type="range" min="0" max="1000" value="0" aria-label="Позиция трека">
+        <span data-duration="${item.id}">0:00</span>
+      </div>
+      <div class="track-player-foot">
+        <button class="track-mute" data-mute="${item.id}" aria-label="Выключить звук">🔊</button>
+        <input data-volume="${item.id}" type="range" min="0" max="1" step="0.01" value="${playerVolume}" aria-label="Громкость">
+        <span data-listen-count="${item.id}">${item.listens} прослушиваний</span>
+        ${item.bpm ? `<span>${esc(item.bpm)} BPM</span>` : ""}
+      </div>
     </div>
-    <h3>${esc(item.title)}</h3>
-    <p>${esc(item.artist || "NOIRWAVE")}${item.genre ? " · " + esc(item.genre) : ""}${item.bpm ? " · " + esc(item.bpm) + " BPM" : ""}</p>
-    <small>${item.listens} прослушиваний</small>
   </article>`;
 }
 
@@ -371,7 +392,14 @@ function renderCatalog() {
     (String(item.price || "").toUpperCase() === "FREE" || item.price === "0")
   ));
   updateCategoryCounts();
+  applyTrackView();
   renderHeader();
+}
+
+function applyTrackView() {
+  $("#dynamicTracks")?.classList.toggle("covers-hidden", coversHidden);
+  const button = $("#trackViewToggle");
+  if (button) button.textContent = coversHidden ? "Показать обложки" : "Скрыть обложки";
 }
 
 function renderFeatured(item) {
@@ -459,6 +487,21 @@ function findItem(id) {
   return catalogState.items.find(item => item.id === id);
 }
 
+function formatTime(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+  const minutes = Math.floor(seconds / 60);
+  const remainder = Math.floor(seconds % 60);
+  return `${minutes}:${String(remainder).padStart(2, "0")}`;
+}
+
+function resetPlayerProgress(id) {
+  if (!id) return;
+  const seek = document.querySelector(`[data-seek="${CSS.escape(id)}"]`);
+  const current = document.querySelector(`[data-current-time="${CSS.escape(id)}"]`);
+  if (seek) seek.value = 0;
+  if (current) current.textContent = "0:00";
+}
+
 function stopAudio() {
   if (currentAudio) {
     currentAudio.pause();
@@ -469,8 +512,10 @@ function stopAudio() {
       ? "▶ Preview" : "▶";
     currentPlayButton.classList.remove("playing");
   }
+  resetPlayerProgress(currentPlayerId);
   currentAudio = null;
   currentPlayButton = null;
+  currentPlayerId = "";
 }
 
 async function playItem(item, button) {
@@ -486,8 +531,25 @@ async function playItem(item, button) {
   }
   currentAudio = new Audio(source);
   currentPlayButton = button;
+  currentPlayerId = item.id;
+  currentAudio.volume = playerVolume;
   button.textContent = "❚❚";
   button.classList.add("playing");
+  const seek = document.querySelector(`[data-seek="${CSS.escape(item.id)}"]`);
+  const currentTime = document.querySelector(`[data-current-time="${CSS.escape(item.id)}"]`);
+  const duration = document.querySelector(`[data-duration="${CSS.escape(item.id)}"]`);
+  const muteButton = document.querySelector(`[data-mute="${CSS.escape(item.id)}"]`);
+  const volume = document.querySelector(`[data-volume="${CSS.escape(item.id)}"]`);
+  if (volume) volume.value = playerVolume;
+  if (muteButton) muteButton.textContent = playerVolume === 0 ? "🔇" : "🔊";
+  currentAudio.addEventListener("loadedmetadata", () => {
+    if (duration) duration.textContent = formatTime(currentAudio.duration);
+  });
+  currentAudio.addEventListener("timeupdate", () => {
+    if (!currentAudio?.duration) return;
+    if (seek) seek.value = Math.round(currentAudio.currentTime / currentAudio.duration * 1000);
+    if (currentTime) currentTime.textContent = formatTime(currentAudio.currentTime);
+  });
   currentAudio.addEventListener("ended", stopAudio, { once: true });
   currentAudio.addEventListener("error", () => {
     stopAudio();
@@ -495,14 +557,18 @@ async function playItem(item, button) {
   }, { once: true });
   try {
     await currentAudio.play();
-    api(`/api/content/${item.id}/listen`, { method: "POST", body: "{}" }).catch(() => {});
+    api(`/api/content/${item.id}/listen`, { method: "POST", body: "{}" }).then(() => {
+      item.listens += 1;
+      const counter = document.querySelector(`[data-listen-count="${CSS.escape(item.id)}"]`);
+      if (counter) counter.textContent = `${item.listens} прослушиваний`;
+    }).catch(() => {});
   } catch {
     stopAudio();
     toast("Браузер не разрешил воспроизведение");
   }
 }
 
-async function downloadPack(item) {
+async function downloadItem(item) {
   if (!authState.user) {
     openAuth();
     toast("Для скачивания войдите через Google");
@@ -521,6 +587,9 @@ async function downloadPack(item) {
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
+    item.downloads += 1;
+    const counter = document.querySelector(`[data-download-count="${CSS.escape(item.id)}"]`);
+    if (counter) counter.textContent = item.downloads;
   } catch (error) {
     if (error.status === 401) {
       authState.user = null;
@@ -541,12 +610,49 @@ document.addEventListener("click", event => {
     if (item) playItem(item, playButton);
     return;
   }
+  const muteButton = event.target.closest("[data-mute]");
+  if (muteButton) {
+    event.preventDefault();
+    if (currentAudio && currentPlayerId === muteButton.dataset.mute) {
+      currentAudio.muted = !currentAudio.muted;
+      muteButton.textContent = currentAudio.muted || currentAudio.volume === 0 ? "🔇" : "🔊";
+    }
+    return;
+  }
   const downloadButton = event.target.closest("[data-download]");
   if (downloadButton) {
     event.preventDefault();
     const item = findItem(downloadButton.dataset.download);
-    if (item) downloadPack(item);
+    if (item) downloadItem(item);
   }
+});
+
+document.addEventListener("input", event => {
+  const volume = event.target.closest("[data-volume]");
+  if (volume) {
+    playerVolume = Number(volume.value);
+    localStorage.setItem("noirwave_volume", String(playerVolume));
+    document.querySelectorAll("[data-volume]").forEach(input => {
+      if (input !== volume) input.value = playerVolume;
+    });
+    if (currentAudio) {
+      currentAudio.volume = playerVolume;
+      currentAudio.muted = false;
+      const mute = document.querySelector(`[data-mute="${CSS.escape(currentPlayerId)}"]`);
+      if (mute) mute.textContent = playerVolume === 0 ? "🔇" : "🔊";
+    }
+    return;
+  }
+  const seek = event.target.closest("[data-seek]");
+  if (seek && currentAudio?.duration && currentPlayerId === seek.dataset.seek) {
+    currentAudio.currentTime = Number(seek.value) / 1000 * currentAudio.duration;
+  }
+});
+
+$("#trackViewToggle")?.addEventListener("click", () => {
+  coversHidden = !coversHidden;
+  localStorage.setItem("noirwave_hide_track_covers", coversHidden ? "1" : "0");
+  applyTrackView();
 });
 
 document.querySelectorAll("[data-pack-filter]").forEach(button => {
