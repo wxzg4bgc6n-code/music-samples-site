@@ -593,15 +593,17 @@ function syncTimeUI(itemId) {
 
 function stopAudio(hidePlayer = false) {
   const stoppedId = currentPlayerId;
-  if (currentAudio) {
-    currentAudio.pause();
-    currentAudio.src = "";
-  }
-  setPlayingState(stoppedId, false);
-  resetPlayerProgress(stoppedId);
+  const audioToStop = currentAudio;
   currentAudio = null;
   currentPlayButton = null;
   currentPlayerId = "";
+  if (audioToStop) {
+    audioToStop.pause();
+    audioToStop.removeAttribute("src");
+    audioToStop.load();
+  }
+  setPlayingState(stoppedId, false);
+  resetPlayerProgress(stoppedId);
   if (hidePlayer) {
     $("#globalPlayer").classList.add("hidden");
     document.body.classList.remove("player-visible");
@@ -630,37 +632,44 @@ async function playItem(item, button) {
     toast("Для этого материала ещё нет аудиопревью");
     return;
   }
-  currentAudio = new Audio(source);
+  const audio = new Audio(source);
+  currentAudio = audio;
   currentPlayButton = button;
   currentPlayerId = item.id;
-  currentAudio.volume = playerVolume;
+  audio.volume = playerVolume;
   updateGlobalPlayer(item);
   setPlayingState(item.id, true);
   const muteButton = document.querySelector(`[data-mute="${CSS.escape(item.id)}"]`);
   const volume = document.querySelector(`[data-volume="${CSS.escape(item.id)}"]`);
   if (volume) volume.value = playerVolume;
   if (muteButton) muteButton.textContent = playerVolume === 0 ? "🔇" : "🔊";
-  currentAudio.addEventListener("loadedmetadata", () => {
+  audio.addEventListener("loadedmetadata", () => {
+    if (currentAudio !== audio) return;
     syncTimeUI(item.id);
   });
-  currentAudio.addEventListener("timeupdate", () => {
+  audio.addEventListener("timeupdate", () => {
+    if (currentAudio !== audio) return;
     syncTimeUI(item.id);
   });
-  currentAudio.addEventListener("ended", () => {
+  audio.addEventListener("ended", () => {
+    if (currentAudio !== audio) return;
     if (!playAdjacent(1, true)) setPlayingState(item.id, false);
   }, { once: true });
-  currentAudio.addEventListener("error", () => {
+  audio.addEventListener("error", () => {
+    if (currentAudio !== audio) return;
     stopAudio(true);
     toast("Не удалось открыть аудиофайл");
   }, { once: true });
   try {
-    await currentAudio.play();
+    await audio.play();
+    if (currentAudio !== audio) return;
     api(`/api/content/${item.id}/listen`, { method: "POST", body: "{}" }).then(() => {
       item.listens += 1;
       const counter = document.querySelector(`[data-listen-count="${CSS.escape(item.id)}"]`);
       if (counter) counter.textContent = `${item.listens} прослушиваний`;
     }).catch(() => {});
   } catch {
+    if (currentAudio !== audio) return;
     stopAudio();
     toast("Браузер не разрешил воспроизведение");
   }
